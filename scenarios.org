@@ -27,7 +27,8 @@
         - Hvis ikke mottar ACK innen tidsrommet:
             - Broadcaste samme ordre til den heisen som er nest nærmest. (Gå til steg 6). Hvis den du skal broadcaste til er deg selv, ikke broadcastast, men gå til "behandle ordre selv".
         - Hvis sendt ordre til alle og ikke mottatt ACK, behandle orden selv (behandle ordre selv) (Ordre behandlet)
-
+    
+    - Hvis peer oppdager at heisen med IP som tilhører orden mister tilkobling, gå tilbake til steg 6 og velg ut nest-beste alternativ. 
 
 * 2. Mottar netverkspakke med ordre
 1. Hvis man mottar ordre fra nettverksmodul
