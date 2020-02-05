@@ -1,10 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"./network/bcast"
@@ -45,15 +45,20 @@ func main() {
 
 	generalTx := make(chan string)
 	generalRx := make(chan string)
-	go bcast.Transmitter(54321, generalTx)
-	go bcast.Receiver(54321, generalRx)
+	go bcast.Transmitter(54321, "28", generalTx)
+	go bcast.Receiver(54321, "28", generalRx)
 
 	// The example message. We just send one of these every second.
 	go func() {
-		var iter int
+		msg := HelloMsg{Message: "Hello from " + id, Iter: 0}
 		for {
-			iter++
-			generalTx <- "Hello from " + id + "   " + strconv.Itoa(iter)
+			msg.Iter++
+
+			// will be its own function
+			jsonbyte, _ := json.Marshal(msg)
+			send := string(jsonbyte)
+
+			generalTx <- string(send)
 			time.Sleep(1 * time.Second)
 		}
 	}()
@@ -62,7 +67,9 @@ func main() {
 	for {
 		select {
 		case a := <-generalRx:
-			fmt.Printf("Received: %#v\n", a)
+			var recv HelloMsg
+			json.Unmarshal([]byte(a), &recv)
+			fmt.Printf("Received: %s %d\n", recv.Message, recv.Iter)
 		}
 	}
 }
