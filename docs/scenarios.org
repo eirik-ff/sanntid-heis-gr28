@@ -49,12 +49,12 @@
     - Kvitter ordre ved å broadcaste ordre og 'done'.
 4. Send melding til kø om å slette ordre (som ligger fremst i køen).
 
+* Timestamp timer
+- Timer som skjekker timestamp på utestående ordre. Hvis nåtid - timestamp er over en threshold, send beskjed til logikk/ordre om at ordren ikke er utført.
+
 
 * Lys Modul
 - Hvis IO modul detekterer at man er i en ny etasje, sett på riktig lys og gi beskjed om ny etasje til høyere nivå.
-
-- Hvis hall lys timeout - Antar at ordren aldri ble betjent, gå til case 1, step 2. (Sannsynlighet for at to heiser har timeout samtidig er veldig liten.)
-
 
 * Motor driver
 - Passer på at man IKKE beveger motor hvis dør er åpen.
@@ -72,3 +72,5 @@ Kø (linked list) for ordre (sortert etter kost):
     - Hvis ingen element har høyere kost, plasser ny ordre sist.
 - Hvis ny ordre er nærmere enn forrige nærmeste ordre.
     - Endre hvilken etasje man skal gå til.
+
+- Ved ny ordre, ta backup av køen og skriv den til en fil.
