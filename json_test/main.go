@@ -83,7 +83,7 @@ func encodeJson(msg interface{}){
 // Decode JSON to correct type based on prefix
 // param msg interface - Prefixed json message to decode
 // Might need a list of all types available to decode to
-func decodeJson(msg interface{}){
+func decodeJson(msg interface{}, typeMap interface{}){
 	fmt.Printf("\n\nStarted decodeJSON\n\n")
 
 	//Assert that msg is a byte array
@@ -103,7 +103,9 @@ func main() {
 	fmt.Println("JSON conversion test")
 	jsonChan := make(chan string) //channel for sending JSON objects as string
 
-	
+	typeMap := make(map[string]interface{})
+	typeMap["Message1"] = int interface{}
+	typeMap["Msg"] = Msg interface{}
 	
 
 	//Create two messages of different types
