@@ -2,4 +2,4 @@
 Heisprosjekt i Sanntid
 
 ## Network Module
-[main.go](main.go) provides an example of how to use the network module.
+[network_example.go](network_example.go) provides an example of how to use the network module.
