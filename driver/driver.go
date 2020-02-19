@@ -3,8 +3,8 @@
 package driver
 
 import (
-	"fmt"
 	"log"
+	"time"
 
 	"./elevio"
 )
@@ -27,6 +27,8 @@ type elevState struct {
 	order        Order
 	currentFloor int
 }
+
+const floorChangeTimeout time.Duration = 3 * time.Second // TODO: Measure suitable value for floorChangeTimeout
 
 var drvButtons chan elevio.ButtonEvent
 var drvFloors chan int
@@ -58,13 +60,15 @@ func driverInit() {
 // Function for checking if at target floor.
 func monitorFloor(floorMonitorChan <-chan bool) {
 	var d elevio.MotorDirection
+	floorChangeTimer := time.NewTimer(floorChangeTimeout)
+	floorChangeTimer.Stop()
 	for {
 		select {
 		case <-floorMonitorChan:
-			fmt.Printf("current: %d		target: %d\n", state.currentFloor, state.order.TargetFloor)
 			if state.currentFloor == state.order.TargetFloor {
 				d = elevio.MD_Stop
 				log.Println("Arrived at floor, stopping motor")
+				floorChangeTimer.Stop()
 
 				elevio.SetButtonLamp(O_Cab, state.currentFloor, false)
 				elevio.SetButtonLamp(elevio.ButtonType(state.order.Type), state.currentFloor, false)
@@ -78,6 +82,14 @@ func monitorFloor(floorMonitorChan <-chan bool) {
 			elevio.SetMotorDirection(d)
 			log.Printf("Setting motor in direction %#v to get to target floor %d\n", d, state.order.TargetFloor)
 			elevio.SetFloorIndicator(state.currentFloor)
+
+			if d != elevio.MD_Stop {
+				floorChangeTimer.Reset(floorChangeTimeout)
+			}
+
+		case <-floorChangeTimer.C:
+			log.Println("floorChangeTimer timed out")
+			// TODO: tell someone else about this (report an error or something)
 		}
 	}
 }
