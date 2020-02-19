@@ -10,11 +10,9 @@ import (
 	"../conn"
 )
 
-const UniqueId string = "28"
-
 // Encodes received values from `chans` into type-tagged JSON, then broadcasts
 // it on `port`
-func Transmitter(port int, chans ...interface{}) {
+func Transmitter(port int, uniqueID string, chans ...interface{}) {
 	checkArgs(chans...)
 
 	n := 0
@@ -37,13 +35,13 @@ func Transmitter(port int, chans ...interface{}) {
 	for {
 		chosen, value, _ := reflect.Select(selectCases)
 		buf, _ := json.Marshal(value.Interface())
-		conn.WriteTo([]byte(UniqueId+typeNames[chosen]+string(buf)), addr)
+		conn.WriteTo([]byte(uniqueID+typeNames[chosen]+string(buf)), addr)
 	}
 }
 
 // Matches type-tagged JSON received on `port` to element types of `chans`, then
 // sends the decoded value on the corresponding channel
-func Receiver(port int, chans ...interface{}) {
+func Receiver(port int, uniqueID string, chans ...interface{}) {
 	checkArgs(chans...)
 
 	var buf [1024]byte
@@ -53,7 +51,7 @@ func Receiver(port int, chans ...interface{}) {
 		for _, ch := range chans {
 			T := reflect.TypeOf(ch).Elem()
 			typeName := T.String()
-			prefix := UniqueId + typeName
+			prefix := uniqueID + typeName
 			if strings.HasPrefix(string(buf[0:n]), prefix) {
 				v := reflect.New(T)
 				json.Unmarshal(buf[len(prefix):n], v.Interface())
