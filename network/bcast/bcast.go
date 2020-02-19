@@ -1,18 +1,18 @@
 package bcast
 
 import (
+
+	"../conn"
 	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
 	"strings"
-
-	"../conn"
 )
 
 // Encodes received values from `chans` into type-tagged JSON, then broadcasts
 // it on `port`
-func Transmitter(port int, uniqueID string, chans ...interface{}) {
+func Transmitter(port int, chans ...interface{}) {
 	checkArgs(chans...)
 
 	n := 0
@@ -41,7 +41,7 @@ func Transmitter(port int, uniqueID string, chans ...interface{}) {
 
 // Matches type-tagged JSON received on `port` to element types of `chans`, then
 // sends the decoded value on the corresponding channel
-func Receiver(port int, uniqueID string, chans ...interface{}) {
+func Receiver(port int, chans ...interface{}) {
 	checkArgs(chans...)
 
 	var buf [1024]byte
