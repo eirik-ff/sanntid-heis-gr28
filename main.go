@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"os/user"
 	"time"
 
@@ -40,6 +41,9 @@ func setupLog() {
 func main() {
 	setupLog()
 
+	pid := os.Getpid()
+	exec.Command("/bin/bash", "-c", fmt.Sprintf("echo %d > /home/eirik/sanntid-heis-gr28/pid.txt", pid)).Run()
+
 	orderChan := make(chan driver.Order)
 	execOrderChan := make(chan driver.Order)
 
@@ -47,15 +51,16 @@ func main() {
 
 	wdChan := make(chan string)
 	go bcast.Transmitter(57005, "", wdChan)
-	wdTimer := time.NewTimer(1 * time.Second)
+	wdTimerInterval := 500 * time.Millisecond
+	wdTimer := time.NewTimer(wdTimerInterval)
 
 	for {
 		select {
 		case order := <-orderChan:
 			execOrderChan <- order
 		case <-wdTimer.C:
-			wdChan <- "IAmAlive"
-			wdTimer.Reset(1 * time.Second)
+			wdChan <- "28-IAmAlive"
+			wdTimer.Reset(wdTimerInterval)
 		}
 	}
 }
