@@ -4,18 +4,22 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/user"
 
 	"./driver"
 )
 
-var (
-	logDirPath  string = "/home/student/sanntid-heis-gr28/logs/"
-	logFileName string = "elev.log"
-	logFilePath string = logDirPath + logFileName
-)
+func setupLog() {
+	usr, err := user.Current()
+	if err != nil {
+		fmt.Println("Couldn't create user object")
+		return
+	}
+	logDirPath := usr.HomeDir + "/sanntid-heis-gr28/logs/"
+	logFileName := "elev.log"
+	logFilePath := logDirPath + logFileName
 
-func main() {
-	err := os.MkdirAll(logDirPath, 0755)
+	err = os.MkdirAll(logDirPath, 0755)
 	if err != nil {
 		fmt.Printf("Error creating log directory at %s\n", logDirPath)
 		return
@@ -29,6 +33,10 @@ func main() {
 
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 	log.SetOutput(os.Stdout)
+}
+
+func main() {
+	setupLog()
 
 	orderChan := make(chan driver.Order)
 	execOrderChan := make(chan driver.Order)
