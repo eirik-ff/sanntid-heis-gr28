@@ -5,8 +5,10 @@ import (
 	"log"
 	"os"
 	"os/user"
+	"time"
 
 	"./driver"
+	"./network/bcast"
 )
 
 func setupLog() {
@@ -43,10 +45,17 @@ func main() {
 
 	go driver.Driver(orderChan, execOrderChan)
 
+	wdChan := make(chan string)
+	go bcast.Transmitter(57005, "", wdChan)
+	wdTimer := time.NewTimer(1 * time.Second)
+
 	for {
 		select {
 		case order := <-orderChan:
 			execOrderChan <- order
+		case <-wdTimer.C:
+			wdChan <- "IAmAlive"
+			wdTimer.Reset(1 * time.Second)
 		}
 	}
 }
