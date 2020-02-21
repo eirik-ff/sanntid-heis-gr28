@@ -97,6 +97,7 @@ func monitorFloor(floorMonitorChan <-chan ElevState) {
 			elevio.SetFloorIndicator(state.CurrentFloor)
 
 			if d != elevio.MD_Stop {
+				floorChangeTimer.Stop()
 				floorChangeTimer.Reset(floorChangeTimeout)
 			}
 
