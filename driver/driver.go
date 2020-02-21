@@ -18,6 +18,16 @@ const (
 	O_Cab                = 2
 )
 
+// MotorDirection is a typedef of elevio.MotorDirection to be able
+// to use it in packages that include driver.
+type MotorDirection elevio.MotorDirection
+
+const (
+	MD_Up   = MotorDirection(elevio.MD_Up)
+	MD_Down = MotorDirection(elevio.MD_Down)
+	MD_Stop = MotorDirection(elevio.MD_Stop)
+)
+
 // Order is a struct with necessary information to execute an order.
 type Order struct {
 	TargetFloor int
@@ -29,7 +39,7 @@ type Order struct {
 type ElevState struct {
 	Order        Order
 	CurrentFloor int
-	Direction    int // TODO: change to elevio.MotorDirection
+	Direction    MotorDirection
 }
 
 const floorChangeTimeout time.Duration = 3 * time.Second // TODO: Measure suitable value for floorChangeTimeout
