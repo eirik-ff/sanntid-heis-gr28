@@ -29,6 +29,7 @@ type Order struct {
 type ElevState struct {
 	Order        Order
 	CurrentFloor int
+	Direction    int // TODO: change to elevio.MotorDirection
 }
 
 const floorChangeTimeout time.Duration = 3 * time.Second // TODO: Measure suitable value for floorChangeTimeout
