@@ -23,9 +23,12 @@ type Order struct {
 	TargetFloor int
 	Type        OrderType
 }
-type elevState struct {
-	order        Order
-	currentFloor int
+
+// ElevState is a struct with the current position and active order of
+// the elevator.
+type ElevState struct {
+	Order        Order
+	CurrentFloor int
 }
 
 const floorChangeTimeout time.Duration = 3 * time.Second // TODO: Measure suitable value for floorChangeTimeout
@@ -35,7 +38,7 @@ var drvFloors chan int
 var drvObstr chan bool
 var drvStop chan bool
 var floorMonitorChan chan bool
-var state elevState
+var state ElevState
 
 // Initialized driver channels for low level communication
 // and starts goroutines for polling hardware.
@@ -65,23 +68,23 @@ func monitorFloor(floorMonitorChan <-chan bool) {
 	for {
 		select {
 		case <-floorMonitorChan:
-			if state.currentFloor == state.order.TargetFloor {
+			if state.CurrentFloor == state.Order.TargetFloor {
 				d = elevio.MD_Stop
 				log.Println("Arrived at floor, stopping motor")
 				floorChangeTimer.Stop()
 
-				elevio.SetButtonLamp(O_Cab, state.currentFloor, false)
-				elevio.SetButtonLamp(elevio.ButtonType(state.order.Type), state.currentFloor, false)
+				elevio.SetButtonLamp(O_Cab, state.CurrentFloor, false)
+				elevio.SetButtonLamp(elevio.ButtonType(state.Order.Type), state.CurrentFloor, false)
 
-			} else if state.currentFloor < state.order.TargetFloor {
+			} else if state.CurrentFloor < state.Order.TargetFloor {
 				d = elevio.MD_Up
 			} else {
 				d = elevio.MD_Down
 			}
 
 			elevio.SetMotorDirection(d)
-			log.Printf("Setting motor in direction %#v to get to target floor %d\n", d, state.order.TargetFloor)
-			elevio.SetFloorIndicator(state.currentFloor)
+			log.Printf("Setting motor in direction %#v to get to target floor %d\n", d, state.Order.TargetFloor)
+			elevio.SetFloorIndicator(state.CurrentFloor)
 
 			if d != elevio.MD_Stop {
 				floorChangeTimer.Reset(floorChangeTimeout)
@@ -110,14 +113,14 @@ func Driver(getOrderChan chan<- Order, execOrderChan <-chan Order) {
 			log.Printf("Received button press: %#v\n", order)
 
 		case newFloor := <-drvFloors:
-			state.currentFloor = newFloor
-			elevio.SetFloorIndicator(state.currentFloor) // Set floor indicator to current floor
+			state.CurrentFloor = newFloor
+			elevio.SetFloorIndicator(state.CurrentFloor) // Set floor indicator to current floor
 			floorMonitorChan <- true                     // Start monitorFloor
 
-			log.Printf("Arrived at new floor: %#v\n", state.currentFloor)
+			log.Printf("Arrived at new floor: %#v\n", state.CurrentFloor)
 
 		case order := <-execOrderChan:
-			state.order = order
+			state.Order = order
 			floorMonitorChan <- true //Start monitorFloor
 
 			log.Printf("Received new order: %#v\n", order)
