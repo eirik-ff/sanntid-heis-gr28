@@ -34,8 +34,7 @@ var drvButtons chan elevio.ButtonEvent
 var drvFloors chan int
 var drvObstr chan bool
 var drvStop chan bool
-var floorMonitorChan chan bool
-var state elevState
+var floorMonitorChan chan elevState
 
 // Initialized driver channels for low level communication
 // and starts goroutines for polling hardware.
@@ -46,7 +45,7 @@ func driverInit() {
 	drvFloors = make(chan int)
 	drvObstr = make(chan bool)
 	drvStop = make(chan bool)
-	floorMonitorChan = make(chan bool)
+	floorMonitorChan = make(chan elevState)
 
 	go elevio.PollButtons(drvButtons)
 	go elevio.PollFloorSensor(drvFloors)
@@ -58,13 +57,13 @@ func driverInit() {
 }
 
 // Function for checking if at target floor.
-func monitorFloor(floorMonitorChan <-chan bool) {
+func monitorFloor(floorMonitorChan <-chan elevState) {
 	var d elevio.MotorDirection
 	floorChangeTimer := time.NewTimer(floorChangeTimeout)
 	floorChangeTimer.Stop()
 	for {
 		select {
-		case <-floorMonitorChan:
+		case state := <-floorMonitorChan:
 			if state.currentFloor == state.order.TargetFloor {
 				d = elevio.MD_Stop
 				log.Println("Arrived at floor, stopping motor")
@@ -98,6 +97,7 @@ func monitorFloor(floorMonitorChan <-chan bool) {
 // and sends the information to a higher level.
 func Driver(getOrderChan chan<- Order, execOrderChan <-chan Order) {
 	driverInit()
+	var state elevState
 
 	for {
 		select {
@@ -105,20 +105,20 @@ func Driver(getOrderChan chan<- Order, execOrderChan <-chan Order) {
 			order := Order{btnEvent.Floor, OrderType(btnEvent.Button)}
 			getOrderChan <- order
 			elevio.SetButtonLamp(btnEvent.Button, btnEvent.Floor, true) // turn on button lamp
-			floorMonitorChan <- true                                    // Start monitorFloor
+			floorMonitorChan <- state                                   // Start monitorFloor
 
 			log.Printf("Received button press: %#v\n", order)
 
 		case newFloor := <-drvFloors:
 			state.currentFloor = newFloor
 			elevio.SetFloorIndicator(state.currentFloor) // Set floor indicator to current floor
-			floorMonitorChan <- true                     // Start monitorFloor
+			floorMonitorChan <- state                    // Start monitorFloor
 
 			log.Printf("Arrived at new floor: %#v\n", state.currentFloor)
 
 		case order := <-execOrderChan:
 			state.order = order
-			floorMonitorChan <- true //Start monitorFloor
+			floorMonitorChan <- state // Start monitorFloor
 
 			log.Printf("Received new order: %#v\n", order)
 		}
