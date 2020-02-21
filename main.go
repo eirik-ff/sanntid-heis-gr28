@@ -57,7 +57,8 @@ func main() {
 		fmt.Println("Error getting current user")
 		return
 	}
-	exec.Command("/bin/bash", "-c", fmt.Sprintf("echo %d > %s/sanntid-heis-gr28/pid.txt", pid, usr.HomeDir)).Run()
+	exec.Command("/bin/bash", "-c", fmt.Sprintf("echo %d > %s/sanntid-heis-gr28/logs/pid.txt", pid, usr.HomeDir)).Run()
+	log.Printf("PID: %d\n", pid)
 
 	// Watchdog setup
 	wdChan := make(chan string)
