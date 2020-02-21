@@ -1,4 +1,4 @@
-package main
+package costfunction
 
 import (
 	"fmt"
@@ -9,12 +9,6 @@ import (
 var maxFloor = 3
 var minFloor = 0
 
-const ( // TODO: change to motor direction
-	dirDown int = -1
-	dirUp       = 1
-	dirStop     = 0
-)
-
 // Cost calculate the cost of the given order.
 // The cost is calculated based on the current position
 func Cost(order driver.Order, state driver.ElevState) int {
@@ -24,7 +18,7 @@ func Cost(order driver.Order, state driver.ElevState) int {
 
 	// Elevator state variables
 	current := state.CurrentFloor
-	currentDir := state.Direction // TODO: change to motor direction
+	currentDir := state.Direction
 
 	target := order.TargetFloor
 	targetDir := order.Type
@@ -33,24 +27,24 @@ func Cost(order driver.Order, state driver.ElevState) int {
 	targetBelow := target < current
 	atTarget := target == current
 
-	if currentDir == dirStop {
+	if currentDir == driver.MD_Stop {
 		cost := target - current
 		if cost < 0 {
 			return -1 * cost
 		}
 		return cost
 	} else if atTarget {
-		if currentDir == dirUp {
+		if currentDir == driver.MD_Up {
 			return updown(current, target)
-		} else if currentDir == dirDown {
+		} else if currentDir == driver.MD_Down {
 			return downup(current, target)
 		}
 
 	} else if targetAbove {
-		if currentDir == dirDown {
+		if currentDir == driver.MD_Down {
 			return downup(current, target)
 		}
-		// else <=> currentDir == dirUp
+		// else <=> currentDir == driver.MD_Up
 		if targetDir == driver.O_HallDown {
 			return updown(current, target)
 		}
@@ -58,10 +52,10 @@ func Cost(order driver.Order, state driver.ElevState) int {
 		return target - current
 
 	} else if targetBelow {
-		if currentDir == dirUp {
+		if currentDir == driver.MD_Up {
 			return updown(current, target)
 		}
-		// else <=> currentDir == dirDown
+		// else <=> currentDir == driver.MD_Down
 		if targetDir == driver.O_HallUp {
 			return downup(current, target)
 		}
@@ -72,7 +66,7 @@ func Cost(order driver.Order, state driver.ElevState) int {
 	return -1 // invalid
 }
 
-func main() {
+func testCost() {
 	c1 := Cost(
 		driver.Order{
 			TargetFloor: 2,
@@ -80,7 +74,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 0,
-			Direction:    dirUp,
+			Direction:    driver.MD_Up,
 		},
 	)
 	c1ans := 2
@@ -92,7 +86,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 0,
-			Direction:    dirUp,
+			Direction:    driver.MD_Up,
 		},
 	)
 	c2ans := 4
@@ -104,7 +98,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 1,
-			Direction:    dirUp,
+			Direction:    driver.MD_Up,
 		},
 	)
 	c3ans := 1
@@ -116,7 +110,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 1,
-			Direction:    dirUp,
+			Direction:    driver.MD_Up,
 		},
 	)
 	c4ans := 3
@@ -128,7 +122,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 1,
-			Direction:    dirUp,
+			Direction:    driver.MD_Up,
 		},
 	)
 	c5ans := 1
@@ -140,7 +134,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 1,
-			Direction:    dirDown,
+			Direction:    driver.MD_Down,
 		},
 	)
 	c6ans := 3
@@ -152,7 +146,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 1,
-			Direction:    dirDown,
+			Direction:    driver.MD_Down,
 		},
 	)
 	c7ans := 3
@@ -164,7 +158,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 2,
-			Direction:    dirUp,
+			Direction:    driver.MD_Up,
 		},
 	)
 	c8ans := 3
@@ -176,7 +170,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 2,
-			Direction:    dirDown,
+			Direction:    driver.MD_Down,
 		},
 	)
 	c9ans := 1
@@ -188,7 +182,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 2,
-			Direction:    dirDown,
+			Direction:    driver.MD_Down,
 		},
 	)
 	c10ans := 3
@@ -200,7 +194,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 2,
-			Direction:    dirDown,
+			Direction:    driver.MD_Down,
 		},
 	)
 	c11ans := 1
@@ -212,7 +206,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 2,
-			Direction:    dirDown,
+			Direction:    driver.MD_Down,
 		},
 	)
 	c12ans := 4
@@ -224,7 +218,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 2,
-			Direction:    dirUp,
+			Direction:    driver.MD_Up,
 		},
 	)
 	c13ans := 2
@@ -236,7 +230,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 1,
-			Direction:    dirDown,
+			Direction:    driver.MD_Down,
 		},
 	)
 	c14ans := 4
@@ -248,7 +242,7 @@ func main() {
 		},
 		driver.ElevState{
 			CurrentFloor: 3,
-			Direction:    dirStop,
+			Direction:    driver.MD_Stop,
 		},
 	)
 	c15ans := 0
