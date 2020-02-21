@@ -19,6 +19,8 @@ func main() {
 	receiveChan1 := make(chan Msg1) //Chan for receiving msg1
 	receiveChan2 := make(chan Msg2) //chan for receiving msg2
 	txChan := make(chan interface{})
+
+	network.InitLogger()
 	
 	msg1 := Msg1{Text: "This is a struct of Msg1", I: 0}
 	msg2 := Msg2{Text: "This is a struct of Msg2"} 
@@ -35,12 +37,10 @@ func main() {
 				case msg := <- receiveChan1:
 				fmt.Println("Received a Msg1")
 				fmt.Println("Content: ", msg)
-				break;
 				
 				case msg := <- receiveChan2:
 				fmt.Println("Received a Msg2")
 				fmt.Println("Content: ", msg)
-				break;
 			}
 		}
 	}()
@@ -49,6 +49,7 @@ func main() {
 	go func(){
 		for{
 
+			
 			txChan <- msg1 //send message 1 to receiver
 			time.Sleep(500 * time.Millisecond)
 			
