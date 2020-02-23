@@ -61,10 +61,10 @@ func main() {
 	log.Printf("PID: %d\n", pid)
 
 	// Watchdog setup
-	wdChan := make(chan string)
+	wdChan := make(chan interface{})
 	wdTimerInterval := 500 * time.Millisecond
 	wdTimer := time.NewTimer(wdTimerInterval)
-	go bcast.Transmitter(57005, "", wdChan)
+	go bcast.Transmitter(57005, wdChan)
 
 	// Capture signals to exit more gracefully
 	sigs := make(chan os.Signal, 1)
