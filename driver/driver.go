@@ -42,7 +42,10 @@ type ElevState struct {
 	Direction    MotorDirection
 }
 
-const floorChangeTimeout time.Duration = 3 * time.Second // TODO: Measure suitable value for floorChangeTimeout
+const (
+	floorChangeTimeout time.Duration = 3 * time.Second // TODO: Measure suitable value for floorChangeTimeout
+	doorTimeout        time.Duration = 3 * time.Second
+)
 
 var drvButtons chan elevio.ButtonEvent
 var drvFloors chan int
@@ -99,6 +102,10 @@ func monitorFloor(floorMonitorChan <-chan ElevState) {
 			if d != elevio.MD_Stop {
 				floorChangeTimer.Stop()
 				floorChangeTimer.Reset(floorChangeTimeout)
+			} else {
+				elevio.SetDoorOpenLamp(true)
+				<-time.After(doorTimeout)
+				elevio.SetDoorOpenLamp(false)
 			}
 
 		case <-floorChangeTimer.C:
@@ -120,7 +127,7 @@ func Driver(getOrderChan chan<- Order, execOrderChan <-chan Order) {
 			order := Order{btnEvent.Floor, OrderType(btnEvent.Button)}
 			getOrderChan <- order
 			elevio.SetButtonLamp(btnEvent.Button, btnEvent.Floor, true) // turn on button lamp
-			floorMonitorChan <- state                                   // Start monitorFloor
+			// floorMonitorChan <- state                                   // Start monitorFloor
 
 			log.Printf("Received button press: %#v\n", order)
 
