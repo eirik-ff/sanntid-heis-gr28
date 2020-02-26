@@ -11,12 +11,16 @@ type Order struct {
 }
 
 // Enqueues new order
-func enqueue(queue *list.List, order Order) {
+func enqueue(queue *list.List, order Order) bool {
 	for e := queue.Front(); e != nil; e = e.Next() {
 		if e.Value.(Order).Cost > order.Cost {
 			fmt.Println(e.Value.(Order).Cost)
 			queue.InsertBefore(order, e)
-			break
+			if e == queue.Front() {
+				return true
+			} else {
+				return false
+			}
 		}
 
 	}
@@ -38,12 +42,12 @@ func printQueue(queue *list.List) {
 	j = 0
 }
 
-func getNextOrder(queue *list.List, nextOrder chan<- Order) {
-	order := queue.Front().Value.(Order)
-	nextOrder <- order
+func getNextOrder(queue *list.List) Order {
+	return queue.Front().Value.(Order)
+
 }
 
-func Queue(OrderEnqueue <-chan Order, OrderDequeue <-chan Order) {
+func Queue(OrderEnqueue <-chan Order, OrderDequeue <-chan Order, NextOrder chan<- Order) {
 
 	//Queue Init
 	queue := list.New()
@@ -51,9 +55,16 @@ func Queue(OrderEnqueue <-chan Order, OrderDequeue <-chan Order) {
 	for {
 		select {
 		case newOrder := <-OrderEnqueue:
-			enqueue(queue, newOrder)
+			insertedAtFront := enqueue(queue, newOrder)
+			if insertedAtFront {
+				NextOrder <- getNextOrder(queue)
+			}
+
 		case <-OrderDequeue:
 			dequeue(queue)
+			if queue.Len() != 0 {
+				NextOrder <- getNextOrder(queue)
+			}
 
 		}
 
