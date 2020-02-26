@@ -10,12 +10,12 @@ import (
 )
 
 // OrderType is a typedef of int
-type OrderType int
+type OrderType elevio.ButtonType
 
 const (
-	O_HallUp   OrderType = 0
-	O_HallDown           = 1
-	O_Cab                = 2
+	O_HallUp   = OrderType(elevio.BT_HallUp)
+	O_HallDown = OrderType(elevio.BT_HallDown)
+	O_Cab      = OrderType(elevio.BT_Cab)
 )
 
 // MotorDirection is a typedef of elevio.MotorDirection to be able
@@ -32,6 +32,7 @@ const (
 type Order struct {
 	TargetFloor int
 	Type        OrderType
+	ForMe       bool // default: false
 }
 
 // ElevState is a struct with the current position and active order of
@@ -86,7 +87,7 @@ func monitorFloor(floorMonitorChan <-chan ElevState) {
 				log.Println("Arrived at floor, stopping motor")
 				floorChangeTimer.Stop()
 
-				elevio.SetButtonLamp(O_Cab, state.CurrentFloor, false)
+				elevio.SetButtonLamp(elevio.ButtonType(O_Cab), state.CurrentFloor, false)
 				elevio.SetButtonLamp(elevio.ButtonType(state.Order.Type), state.CurrentFloor, false)
 
 			} else if state.CurrentFloor < state.Order.TargetFloor {
@@ -124,9 +125,11 @@ func Driver(getOrderChan chan<- Order, execOrderChan <-chan Order) {
 	for {
 		select {
 		case btnEvent := <-drvButtons:
-			order := Order{btnEvent.Floor, OrderType(btnEvent.Button)}
+			order := Order{
+				TargetFloor: btnEvent.Floor,
+				Type:        OrderType(btnEvent.Button),
+			}
 			getOrderChan <- order
-			elevio.SetButtonLamp(btnEvent.Button, btnEvent.Floor, true) // turn on button lamp
 			// floorMonitorChan <- state                                   // Start monitorFloor
 
 			log.Printf("Received button press: %#v\n", order)
@@ -139,10 +142,15 @@ func Driver(getOrderChan chan<- Order, execOrderChan <-chan Order) {
 			log.Printf("Arrived at new floor: %#v\n", state.CurrentFloor)
 
 		case order := <-execOrderChan:
-			state.Order = order
-			floorMonitorChan <- state // Start monitorFloor
+			elevio.SetButtonLamp(elevio.ButtonType(order.Type), order.TargetFloor, true) // turn on button lamp
 
-			log.Printf("Received new order: %#v\n", order)
+			if order.ForMe {
+				state.Order = order
+				floorMonitorChan <- state // Start monitorFloor
+				log.Printf("Received new order for ME: %#v\n", order)
+			} else {
+				log.Println("Received new order NOT for me")
+			}
 		}
 	}
 }

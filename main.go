@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"./driver"
+	"./network"
 	"./network/bcast"
 )
 
@@ -76,13 +77,42 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	orderChan := make(chan driver.Order)
+	// Combine network and driver
+	txChan := make(chan interface{})
+	networkOrderChan := make(chan driver.Order)
+	go network.Network(20028, txChan, networkOrderChan)
+
+	if len(os.Args) == 2 && os.Args[1] == "send" {
+		txChan <- driver.Order{
+			TargetFloor: 2,
+			Type:        driver.O_HallUp,
+		}
+		time.Sleep(1 * time.Second)
+		return
+	}
+
+	buttonOrderChan := make(chan driver.Order)
 	execOrderChan := make(chan driver.Order)
-	go driver.Driver(orderChan, execOrderChan)
+	go driver.Driver(buttonOrderChan, execOrderChan)
 
 	for {
 		select {
-		case order := <-orderChan:
+		case order := <-buttonOrderChan:
+			if order.Type == driver.O_Cab {
+				order.ForMe = true
+				execOrderChan <- order
+			} else {
+				// send on network
+				txChan <- order
+			}
+			// start cost function and decide who should take order (own function)
+		case order := <-networkOrderChan:
+			log.Printf("Received order from network: %#v\n", order)
+			if true { // should I take this?
+				order.ForMe = true
+			} else {
+				order.ForMe = false
+			}
 			execOrderChan <- order
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
