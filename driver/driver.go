@@ -6,16 +6,8 @@ import (
 	"log"
 	"time"
 
+	"../elevTypes/order"
 	"./elevio"
-)
-
-// OrderType is a typedef of int
-type OrderType int
-
-const (
-	O_HallUp   OrderType = 0
-	O_HallDown           = 1
-	O_Cab                = 2
 )
 
 // MotorDirection is a typedef of elevio.MotorDirection to be able
@@ -28,30 +20,28 @@ const (
 	MD_Stop = MotorDirection(elevio.MD_Stop)
 )
 
-// Order is a struct with necessary information to execute an order.
-type Order struct {
-	TargetFloor int
-	Type        OrderType
-}
-
 // ElevState is a struct with the current position and active order of
 // the elevator.
 type ElevState struct {
-	Order        Order
+	Order        order.Order
 	CurrentFloor int
 	Direction    MotorDirection
 }
 
 const (
-	floorChangeTimeout time.Duration = 3 * time.Second // TODO: Measure suitable value for floorChangeTimeout
+	floorChangeTimeout time.Duration = 5 * time.Second // TODO: Measure suitable value for floorChangeTimeout
 	doorTimeout        time.Duration = 3 * time.Second
 )
 
-var drvButtons chan elevio.ButtonEvent
-var drvFloors chan int
-var drvObstr chan bool
-var drvStop chan bool
-var floorMonitorChan chan ElevState
+var (
+	drvButtons chan elevio.ButtonEvent
+	drvFloors  chan int
+	drvObstr   chan bool
+	drvStop    chan bool
+
+	floorMonitorChan chan ElevState
+	updatedStateChan chan ElevState
+)
 
 // Initialized driver channels for low level communication
 // and starts goroutines for polling hardware.
@@ -63,18 +53,19 @@ func driverInit() {
 	drvObstr = make(chan bool)
 	drvStop = make(chan bool)
 	floorMonitorChan = make(chan ElevState)
+	updatedStateChan = make(chan ElevState)
 
 	go elevio.PollButtons(drvButtons)
 	go elevio.PollFloorSensor(drvFloors)
 	go elevio.PollObstructionSwitch(drvObstr)
 	go elevio.PollStopButton(drvStop)
-	go monitorFloor(floorMonitorChan)
+	go monitorFloor(floorMonitorChan, updatedStateChan)
 
 	log.Printf("Driver initialized")
 }
 
 // Function for checking if at target floor.
-func monitorFloor(floorMonitorChan <-chan ElevState) {
+func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState) {
 	var d elevio.MotorDirection
 	floorChangeTimer := time.NewTimer(floorChangeTimeout)
 	floorChangeTimer.Stop()
@@ -86,8 +77,10 @@ func monitorFloor(floorMonitorChan <-chan ElevState) {
 				log.Println("Arrived at floor, stopping motor")
 				floorChangeTimer.Stop()
 
-				elevio.SetButtonLamp(O_Cab, state.CurrentFloor, false)
+				elevio.SetButtonLamp(order.Cab, state.CurrentFloor, false)
 				elevio.SetButtonLamp(elevio.ButtonType(state.Order.Type), state.CurrentFloor, false)
+
+				state.Order.Finished = true
 
 			} else if state.CurrentFloor < state.Order.TargetFloor {
 				d = elevio.MD_Up
@@ -99,13 +92,18 @@ func monitorFloor(floorMonitorChan <-chan ElevState) {
 			log.Printf("Setting motor in direction %#v to get to target floor %d\n", d, state.Order.TargetFloor)
 			elevio.SetFloorIndicator(state.CurrentFloor)
 
+			state.Direction = MotorDirection(d)
+			stateChan <- state
+
 			if d != elevio.MD_Stop {
 				floorChangeTimer.Stop()
 				floorChangeTimer.Reset(floorChangeTimeout)
 			} else {
 				elevio.SetDoorOpenLamp(true)
+				log.Println("Opening door")
 				<-time.After(doorTimeout)
 				elevio.SetDoorOpenLamp(false)
+				log.Println("Closing door")
 			}
 
 		case <-floorChangeTimer.C:
@@ -117,19 +115,25 @@ func monitorFloor(floorMonitorChan <-chan ElevState) {
 
 // Driver is the main function of the package. It reads the low level channels
 // and sends the information to a higher level.
-func Driver(getOrderChan chan<- Order, execOrderChan <-chan Order) {
+func Driver(
+	getOrderChan chan<- order.Order,
+	execOrderChan <-chan order.Order,
+	externalStateChan chan<- ElevState) {
+
 	driverInit()
 	var state ElevState
 
 	for {
 		select {
 		case btnEvent := <-drvButtons:
-			order := Order{btnEvent.Floor, OrderType(btnEvent.Button)}
-			getOrderChan <- order
+			o := order.Order{
+				TargetFloor: btnEvent.Floor,
+				Type:        order.Type(btnEvent.Button),
+			}
+			getOrderChan <- o
 			elevio.SetButtonLamp(btnEvent.Button, btnEvent.Floor, true) // turn on button lamp
-			// floorMonitorChan <- state                                   // Start monitorFloor
 
-			log.Printf("Received button press: %#v\n", order)
+			log.Printf("Received button press: %#v\n", o)
 
 		case newFloor := <-drvFloors:
 			state.CurrentFloor = newFloor
@@ -138,11 +142,14 @@ func Driver(getOrderChan chan<- Order, execOrderChan <-chan Order) {
 
 			log.Printf("Arrived at new floor: %#v\n", state.CurrentFloor)
 
-		case order := <-execOrderChan:
-			state.Order = order
+		case o := <-execOrderChan:
+			state.Order = o
 			floorMonitorChan <- state // Start monitorFloor
 
-			log.Printf("Received new order: %#v\n", order)
+			log.Printf("Received new order: %#v\n", o)
+
+		case state = <-updatedStateChan:
+			externalStateChan <- state
 		}
 	}
 }

@@ -10,8 +10,11 @@ import (
 	"syscall"
 	"time"
 
+	"./costfunction"
 	"./driver"
+	"./elevTypes/order"
 	"./network/bcast"
+	"./queue"
 )
 
 const (
@@ -59,6 +62,9 @@ func logPID() {
 }
 
 func main() {
+	// costfunction.TestCost()
+	// return
+
 	logFile, err := setupLog()
 	if err != nil {
 		fmt.Println("Error setting up log")
@@ -76,17 +82,45 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	orderChan := make(chan driver.Order)
-	execOrderChan := make(chan driver.Order)
-	go driver.Driver(orderChan, execOrderChan)
+	// Init driver
+	buttonOrderChan := make(chan order.Order)
+	execOrderChan := make(chan order.Order)
+	stateChan := make(chan driver.ElevState)
+	go driver.Driver(buttonOrderChan, execOrderChan, stateChan)
+
+	var state driver.ElevState
+
+	// Init order
+	localOrderEnqueueChan := make(chan queue.QueueOrder)
+	localOrderDequeueChan := make(chan bool)
+	localNextOrderChan := make(chan order.Order)
+	go queue.Queue(localOrderEnqueueChan, localOrderDequeueChan, localNextOrderChan)
 
 	for {
 		select {
-		case order := <-orderChan:
-			execOrderChan <- order
+		case state = <-stateChan:
+			log.Printf("New state: %v\n", state)
+
+			if state.Order.Finished {
+				localOrderDequeueChan <- true
+			}
+
+		case ord := <-buttonOrderChan:
+			// execOrderChan <- order
+			o := queue.QueueOrder{
+				Order: ord,
+				Cost:  costfunction.Cost(ord, state),
+			}
+			localOrderEnqueueChan <- o
+
+		case nextOrder := <-localNextOrderChan:
+			log.Printf("Next order to execute: %#v\n", nextOrder)
+			execOrderChan <- nextOrder
+
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
 			wdTimer.Reset(wdTimerInterval)
+
 		case sig := <-sigs:
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())
 			return
