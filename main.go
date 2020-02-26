@@ -14,6 +14,10 @@ import (
 	"./network/bcast"
 )
 
+const (
+	wdTimerInterval time.Duration = 500 * time.Millisecond
+)
+
 func setupLog() (*os.File, error) {
 	usr, err := user.Current()
 	if err != nil {
@@ -42,14 +46,7 @@ func setupLog() (*os.File, error) {
 	return logFile, nil
 }
 
-func main() {
-	logFile, err := setupLog()
-	if err != nil {
-		fmt.Println("Error setting up log")
-		return
-	}
-	defer logFile.Close()
-
+func logPID() {
 	// Save current PID to file to be able to kill program
 	pid := os.Getpid()
 	usr, err := user.Current()
@@ -59,10 +56,19 @@ func main() {
 	}
 	exec.Command("/bin/bash", "-c", fmt.Sprintf("echo %d > %s/sanntid-heis-gr28/logs/pid.txt", pid, usr.HomeDir)).Run()
 	log.Printf("PID: %d\n", pid)
+}
+
+func main() {
+	logFile, err := setupLog()
+	if err != nil {
+		fmt.Println("Error setting up log")
+		return
+	}
+	defer logFile.Close()
+	logPID()
 
 	// Watchdog setup
 	wdChan := make(chan interface{})
-	wdTimerInterval := 500 * time.Millisecond
 	wdTimer := time.NewTimer(wdTimerInterval)
 	go bcast.Transmitter(57005, wdChan)
 
