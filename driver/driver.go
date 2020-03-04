@@ -101,7 +101,16 @@ func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState)
 			} else {
 				elevio.SetDoorOpenLamp(true)
 				log.Println("Opening door")
-				<-time.After(doorTimeout)
+				// <-time.After(doorTimeout)
+
+				// for now, door is not active as it causes some head ache. if more
+				// than one order comes when the door is open, they do no light up
+				// before the door closes again (given that drvButtons are buffered)
+				// this must be fixed later by maybe separating motor and light
+				// activation code, but for now, we just ignore it and handle it
+				// later
+				// TODO: OBS, dette må vi gjøre noe med! :O
+
 				elevio.SetDoorOpenLamp(false)
 				log.Println("Closing door")
 			}
