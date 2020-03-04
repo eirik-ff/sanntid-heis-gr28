@@ -53,7 +53,7 @@ func driverInit() {
 	drvObstr = make(chan bool)
 	drvStop = make(chan bool)
 	floorMonitorChan = make(chan ElevState)
-	updatedStateChan = make(chan ElevState)
+	updatedStateChan = make(chan ElevState, 100) // This have caused problems if unbuffered
 
 	go elevio.PollButtons(drvButtons)
 	go elevio.PollFloorSensor(drvFloors)
@@ -93,7 +93,7 @@ func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState)
 			elevio.SetFloorIndicator(state.CurrentFloor)
 
 			state.Direction = MotorDirection(d)
-			stateChan <- state
+			stateChan <- state // this blocks if channel is unbuffered
 
 			if d != elevio.MD_Stop {
 				floorChangeTimer.Stop()

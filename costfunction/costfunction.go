@@ -47,7 +47,7 @@ func Cost(ord order.Order, state driver.ElevState) int {
 	}
 
 	if state.Order.Finished { // elevator is stationary and no active order
-		fmt.Printf("############ Active finished: %#v	Target order: %#v\n", state.Order, ord)
+		// fmt.Printf("############ Active finished: %#v	Target order: %#v\n", state.Order, ord)
 
 		cost := target - current
 		if cost < 0 {
@@ -55,7 +55,7 @@ func Cost(ord order.Order, state driver.ElevState) int {
 		}
 		return cost
 	} else if atTarget {
-		fmt.Printf("############ At target with order: %#v\n", ord)
+		// fmt.Printf("############ At target with order: %#v\n", ord)
 		if orderDir == order.HallUp {
 			if currentDir == driver.MD_Down {
 				return downup(current, target)
@@ -69,7 +69,7 @@ func Cost(ord order.Order, state driver.ElevState) int {
 		}
 
 	} else if targetAbove {
-		fmt.Printf("############ Target above with order: %#v\n", ord)
+		// fmt.Printf("############ Target above with order: %#v\n", ord)
 		if orderDir == order.HallDown {
 			if currentDir == driver.MD_Up {
 				return updown(current, target)
@@ -85,7 +85,7 @@ func Cost(ord order.Order, state driver.ElevState) int {
 		return target - current
 
 	} else if targetBelow {
-		fmt.Printf("############ Target below with order: %#v\n", ord)
+		// fmt.Printf("############ Target below with order: %#v\n", ord)
 		if orderDir == order.HallUp {
 			if currentDir == driver.MD_Down {
 				return downup(current, target)

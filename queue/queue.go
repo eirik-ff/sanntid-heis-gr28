@@ -20,8 +20,15 @@ type QueueOrder struct {
 // return false: didn't insert before at front
 func enqueue(queue *list.List, order QueueOrder) bool {
 	for e := queue.Front(); e != nil; e = e.Next() {
+		if e.Value.(QueueOrder).Order.Type == order.Order.Type &&
+			e.Value.(QueueOrder).Order.TargetFloor == order.Order.TargetFloor {
+			return false
+		}
+	}
+
+	for e := queue.Front(); e != nil; e = e.Next() {
 		if e.Value.(QueueOrder).Cost > order.Cost {
-			fmt.Println(e.Value.(QueueOrder).Cost)
+			// fmt.Println(e.Value.(QueueOrder).Cost)
 			queue.InsertBefore(order, e)
 			if e == queue.Front() {
 				return true
