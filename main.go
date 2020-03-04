@@ -84,15 +84,15 @@ func main() {
 
 	// Init driver
 	buttonOrderChan := make(chan order.Order)
-	execOrderChan := make(chan order.Order)
-	stateChan := make(chan driver.ElevState)
+	execOrderChan := make(chan order.Order, 10)
+	stateChan := make(chan driver.ElevState, 10)
 	go driver.Driver(buttonOrderChan, execOrderChan, stateChan)
 
 	var state driver.ElevState
 
 	// Init order
-	localOrderEnqueueChan := make(chan queue.QueueOrder)
-	localOrderDequeueChan := make(chan bool)
+	localOrderEnqueueChan := make(chan queue.QueueOrder, 50)
+	localOrderDequeueChan := make(chan bool, 50)
 	localNextOrderChan := make(chan order.Order)
 	go queue.Queue(localOrderEnqueueChan, localOrderDequeueChan, localNextOrderChan)
 
@@ -102,7 +102,9 @@ func main() {
 			log.Printf("New state: %v\n", state)
 
 			if state.Order.Finished {
+				fmt.Printf("Before localOrderDeqeueChan: %d\n", len(localOrderDequeueChan))
 				localOrderDequeueChan <- true
+				fmt.Printf("After localOrderDeqeueChan: %d\n", len(localOrderDequeueChan))
 			}
 
 		case ord := <-buttonOrderChan:
@@ -111,11 +113,17 @@ func main() {
 				Order: ord,
 				Cost:  costfunction.Cost(ord, state),
 			}
+			fmt.Printf("Before localOrderEnqueueChan: %d\n", len(localOrderEnqueueChan))
 			localOrderEnqueueChan <- o
+			fmt.Printf("After localOrderEnqueueChan: %d\n", len(localOrderEnqueueChan))
 
 		case nextOrder := <-localNextOrderChan:
+			fmt.Println("After localNextOrderChan")
 			log.Printf("Next order to execute: %#v\n", nextOrder)
+
+			fmt.Println("Before execOrderChan")
 			execOrderChan <- nextOrder
+			fmt.Println("After execOrderChan")
 
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"

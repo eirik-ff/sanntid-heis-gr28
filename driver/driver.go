@@ -3,6 +3,7 @@
 package driver
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -96,8 +97,10 @@ func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState)
 			stateChan <- state
 
 			if d != elevio.MD_Stop {
+				fmt.Println("Before Stopping and resetting floorChangeTimer")
 				floorChangeTimer.Stop()
 				floorChangeTimer.Reset(floorChangeTimeout)
+				fmt.Println("After Stopping and resetting floorChangeTimer")
 			} else {
 				elevio.SetDoorOpenLamp(true)
 				log.Println("Opening door")
@@ -137,8 +140,14 @@ func Driver(
 
 		case newFloor := <-drvFloors:
 			state.CurrentFloor = newFloor
-			elevio.SetFloorIndicator(state.CurrentFloor) // Set floor indicator to current floor
-			floorMonitorChan <- state                    // Start monitorFloor
+			elevio.SetFloorIndicator(state.CurrentFloor) // Set floor indicator to current floor'
+
+			if newFloor == 0 || newFloor == 3 {
+				fmt.Println("Stopping motor because end of elevator")
+				elevio.SetMotorDirection(elevio.MD_Stop)
+			}
+
+			floorMonitorChan <- state // Start monitorFloor
 
 			log.Printf("Arrived at new floor: %#v\n", state.CurrentFloor)
 
