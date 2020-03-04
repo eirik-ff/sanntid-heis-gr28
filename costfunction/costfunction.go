@@ -46,7 +46,7 @@ func Cost(ord order.Order, state driver.ElevState) int {
 		}
 	}
 
-	if state.Order.Finished { // elevator is stationary and no active order
+	if state.Order.Status == order.Finished { // elevator is stationary and no active order
 		// fmt.Printf("############ Active finished: %#v	Target order: %#v\n", state.Order, ord)
 
 		cost := target - current
@@ -294,7 +294,7 @@ func TestCost() {
 		driver.ElevState{
 			CurrentFloor: 3,
 			Direction:    driver.MD_Stop,
-			Order:        order.Order{Type: order.Cab, Finished: true},
+			Order:        order.Order{Type: order.Cab, Status: order.Finished},
 		},
 	)
 	c15ans := 0
@@ -307,7 +307,7 @@ func TestCost() {
 		driver.ElevState{
 			CurrentFloor: 1,
 			Direction:    driver.MD_Stop,
-			Order:        order.Order{Type: order.HallUp, TargetFloor: 3, Finished: false},
+			Order:        order.Order{Type: order.HallUp, TargetFloor: 3},
 		},
 	)
 	c16ans := 5
@@ -320,7 +320,7 @@ func TestCost() {
 		driver.ElevState{
 			CurrentFloor: 0,
 			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallDown, TargetFloor: 2, Finished: false},
+			Order:        order.Order{Type: order.HallDown, TargetFloor: 2},
 		},
 	)
 	c17ans := 6
@@ -333,7 +333,7 @@ func TestCost() {
 		driver.ElevState{
 			CurrentFloor: 0,
 			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallDown, TargetFloor: 3, Finished: false},
+			Order:        order.Order{Type: order.HallDown, TargetFloor: 3},
 		},
 	)
 	c18ans := 4
@@ -346,7 +346,7 @@ func TestCost() {
 		driver.ElevState{
 			CurrentFloor: 3,
 			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallUp, TargetFloor: 1, Finished: false},
+			Order:        order.Order{Type: order.HallUp, TargetFloor: 1},
 		},
 	)
 	c19ans := 6

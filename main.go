@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -84,12 +85,16 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	// Init driver
+	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
+	flag.Parse()
+
 	buttonOrderChan := make(chan order.Order)
 	execOrderChan := make(chan order.Order)
 	stateChan := make(chan driver.ElevState)
-	go driver.Driver(buttonOrderChan, execOrderChan, stateChan)
+	go driver.Driver(*port, buttonOrderChan, execOrderChan, stateChan)
 
 	var state driver.ElevState
+	var lowerCostReplySentID int64
 
 	// Combine network and driver
 	txChan := make(chan interface{})
@@ -97,8 +102,8 @@ func main() {
 	go network.Network(20028, txChan, networkOrderChan)
 
 	// Init order
-	localOrderEnqueueChan := make(chan queue.QueueOrder)
-	localOrderDequeueChan := make(chan bool)
+	localOrderEnqueueChan := make(chan order.Order)
+	localOrderDequeueChan := make(chan order.Order)
 	localNextOrderChan := make(chan order.Order)
 	go queue.Queue(localOrderEnqueueChan, localOrderDequeueChan, localNextOrderChan)
 
@@ -107,40 +112,50 @@ func main() {
 		case state = <-stateChan:
 			log.Printf("New state: %v\n", state)
 
-			if state.Order.Finished {
-				localOrderDequeueChan <- true
+			if state.Order.Status == order.Finished {
+				localOrderDequeueChan <- state.Order
 			}
 
 		case ord := <-buttonOrderChan:
-			// execOrderChan <- order
-			o := queue.QueueOrder{
-				Order: ord,
-				Cost:  costfunction.Cost(ord, state),
-			}
-			localOrderEnqueueChan <- o
+			// TODO: move formatting to function
+			ord.ID = time.Now().UnixNano()
+			ord.Status = order.InitialBroadcast
+			ord.Cost = costfunction.Cost(ord, state)
 
-			if ord.Type == order.Cab {
-				ord.ForMe = true
-				execOrderChan <- ord
-			} else {
-				// send on network
+			localOrderEnqueueChan <- ord
+
+			// if cab order, no need to broadcast
+			if ord.Type != order.Cab {
 				txChan <- ord
 			}
-			// start cost function and decide who should take order (own function)
 
 		case nextOrder := <-localNextOrderChan:
 			log.Printf("Next order to execute: %#v\n", nextOrder)
 			execOrderChan <- nextOrder
 
-		case order := <-networkOrderChan:
-			log.Printf("Received order from network: %#v\n", order)
-			if true { // should I take this?
-				order.ForMe = true
-			} else {
-				order.ForMe = false
-			}
-			execOrderChan <- order
+		case ord := <-networkOrderChan:
+			log.Printf("Received order from network: %#v\n", ord)
 
+			switch ord.Status {
+			case order.InitialBroadcast:
+				cost := costfunction.Cost(ord, state)
+				log.Printf("Own cost: %d\n", cost)
+				if cost < ord.Cost {
+					ord.Status = order.LowerCostReply
+					ord.Cost = cost
+
+					// if lower cost, save ID so you won't abort your own order
+					lowerCostReplySentID = ord.ID
+
+					localOrderEnqueueChan <- ord
+					txChan <- ord
+					log.Printf("Sending lower cost reply with cost: %d\n", cost)
+				}
+			case order.LowerCostReply:
+				if ord.ID != lowerCostReplySentID {
+					localOrderDequeueChan <- ord
+				}
+			}
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
 			wdTimer.Reset(wdTimerInterval)

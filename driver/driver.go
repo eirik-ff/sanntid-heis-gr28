@@ -3,6 +3,7 @@
 package driver
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -45,8 +46,8 @@ var (
 
 // Initialized driver channels for low level communication
 // and starts goroutines for polling hardware.
-func driverInit() {
-	elevio.Init("localhost:15657", 4) // TODO: CHANGE CHANGE CHANGE
+func driverInit(port int) {
+	elevio.Init(fmt.Sprintf("localhost:%d", port), 4) // TODO: CHANGE CHANGE CHANGE
 
 	drvButtons = make(chan elevio.ButtonEvent, 10)
 	drvFloors = make(chan int)
@@ -72,7 +73,11 @@ func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState)
 	for {
 		select {
 		case state := <-floorMonitorChan:
-			if state.CurrentFloor == state.Order.TargetFloor {
+			if state.Order.Status == order.Abort {
+				d = elevio.MD_Stop
+				floorChangeTimer.Stop()
+				log.Println("Aborting order")
+			} else if state.CurrentFloor == state.Order.TargetFloor {
 				d = elevio.MD_Stop
 				log.Println("Arrived at floor, stopping motor")
 				floorChangeTimer.Stop()
@@ -80,7 +85,7 @@ func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState)
 				elevio.SetButtonLamp(order.Cab, state.CurrentFloor, false)
 				elevio.SetButtonLamp(elevio.ButtonType(state.Order.Type), state.CurrentFloor, false)
 
-				state.Order.Finished = true
+				state.Order.Status = order.Finished
 
 			} else if state.CurrentFloor < state.Order.TargetFloor {
 				d = elevio.MD_Up
@@ -98,10 +103,10 @@ func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState)
 			if d != elevio.MD_Stop {
 				floorChangeTimer.Stop()
 				floorChangeTimer.Reset(floorChangeTimeout)
-			} else {
+			} else if d == elevio.MD_Stop && state.Order.Status != order.Abort {
 				elevio.SetDoorOpenLamp(true)
 				log.Println("Opening door")
-				// <-time.After(doorTimeout)
+				<-time.After(doorTimeout)
 
 				// for now, door is not active as it causes some head ache. if more
 				// than one order comes when the door is open, they do no light up
@@ -124,12 +129,12 @@ func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState)
 
 // Driver is the main function of the package. It reads the low level channels
 // and sends the information to a higher level.
-func Driver(
+func Driver(port int,
 	getOrderChan chan<- order.Order,
 	execOrderChan <-chan order.Order,
 	externalStateChan chan<- ElevState) {
 
-	driverInit()
+	driverInit(port)
 	var state ElevState
 
 	for {
@@ -151,21 +156,15 @@ func Driver(
 
 			log.Printf("Arrived at new floor: %#v\n", state.CurrentFloor)
 
-		case o := <-execOrderChan:
-			elevio.SetButtonLamp(elevio.ButtonType(o.Type), o.TargetFloor, true) // turn on button lamp
-
-			if o.ForMe {
-				state.Order = o
-				floorMonitorChan <- state // Start monitorFloor
-				log.Printf("Received new order for ME: %#v\n", o)
-			} else {
-				log.Println("Received new order NOT for me")
+		case ord := <-execOrderChan:
+			if ord.Status != order.Abort {
+				elevio.SetButtonLamp(elevio.ButtonType(ord.Type), ord.TargetFloor, true) // turn on button lamp
 			}
 
-			state.Order = o
+			state.Order = ord
 			floorMonitorChan <- state // Start monitorFloor
 
-			log.Printf("Received new order: %#v\n", o)
+			log.Printf("Received new order: %#v\n", ord)
 
 		case state = <-updatedStateChan:
 			externalStateChan <- state
