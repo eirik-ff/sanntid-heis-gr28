@@ -48,12 +48,12 @@ var (
 func driverInit() {
 	elevio.Init("localhost:15657", 4) // TODO: CHANGE CHANGE CHANGE
 
-	drvButtons = make(chan elevio.ButtonEvent)
+	drvButtons = make(chan elevio.ButtonEvent, 10)
 	drvFloors = make(chan int)
 	drvObstr = make(chan bool)
 	drvStop = make(chan bool)
 	floorMonitorChan = make(chan ElevState)
-	updatedStateChan = make(chan ElevState, 100) // This have caused problems if unbuffered
+	updatedStateChan = make(chan ElevState, 1) // This have caused problems if unbuffered
 
 	go elevio.PollButtons(drvButtons)
 	go elevio.PollFloorSensor(drvFloors)

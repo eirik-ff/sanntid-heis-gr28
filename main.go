@@ -83,17 +83,17 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
 	// Init driver
-	buttonOrderChan := make(chan order.Order, 100)
-	execOrderChan := make(chan order.Order, 100)
-	stateChan := make(chan driver.ElevState, 100)
+	buttonOrderChan := make(chan order.Order)
+	execOrderChan := make(chan order.Order)
+	stateChan := make(chan driver.ElevState)
 	go driver.Driver(buttonOrderChan, execOrderChan, stateChan)
 
 	var state driver.ElevState
 
 	// Init order
-	localOrderEnqueueChan := make(chan queue.QueueOrder, 100)
-	localOrderDequeueChan := make(chan bool, 100)
-	localNextOrderChan := make(chan order.Order, 100)
+	localOrderEnqueueChan := make(chan queue.QueueOrder)
+	localOrderDequeueChan := make(chan bool)
+	localNextOrderChan := make(chan order.Order)
 	go queue.Queue(localOrderEnqueueChan, localOrderDequeueChan, localNextOrderChan)
 
 	for {
