@@ -12,14 +12,14 @@ var minFloor = 0
 
 // Cost calculate the cost of the given order ord.
 // The cost is calculated based on the current position
-func Cost(ord order.Order, state driver.ElevState) int {
+func Cost(ord order.Order, elev driver.Elevator) int {
 	// Functions used to calculate cost if directions doesn't match
 	updown := func(c, t int) int { return (maxFloor - c) + (maxFloor - t) }
 	downup := func(c, t int) int { return (c - minFloor) + (t - minFloor) }
 
 	// Elevator state variables
-	current := state.CurrentFloor
-	currentDir := state.Direction
+	current := elev.Floor
+	currentDir := elev.Direction
 
 	target := ord.TargetFloor
 	targetDir := ord.Type
@@ -29,11 +29,11 @@ func Cost(ord order.Order, state driver.ElevState) int {
 	atTarget := target == current
 
 	//Set orderDir based on cab call or not
-	orderDir := state.Order.Type
-	if state.Order.Type == order.Cab {
-		if state.Direction == driver.MD_Up {
+	orderDir := elev.ActiveOrder.Type
+	if elev.ActiveOrder.Type == order.Cab {
+		if elev.Direction == driver.MD_Up {
 			orderDir = order.HallUp
-		} else if state.Direction == driver.MD_Down {
+		} else if elev.Direction == driver.MD_Down {
 			orderDir = order.HallDown
 		} else {
 			//If cab order and target above the direction is up,
@@ -46,8 +46,8 @@ func Cost(ord order.Order, state driver.ElevState) int {
 		}
 	}
 
-	if state.Order.Status == order.Finished { // elevator is stationary and no active order
-		// fmt.Printf("############ Active finished: %#v	Target order: %#v\n", state.Order, ord)
+	if elev.ActiveOrder.Status == order.Finished { // elevator is stationary and no active order
+		// fmt.Printf("############ Active finished: %#v	Target order: %#v\n", elev.ActiveOrder, ord)
 
 		cost := target - current
 		if cost < 0 {
@@ -109,10 +109,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.HallUp,
 		},
-		driver.ElevState{
-			CurrentFloor: 0,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallUp},
+		driver.Elevator{
+			Floor:       0,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallUp},
 		},
 	)
 	c1ans := 2
@@ -122,10 +122,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.HallDown,
 		},
-		driver.ElevState{
-			CurrentFloor: 0,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallUp},
+		driver.Elevator{
+			Floor:       0,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallUp},
 		},
 	)
 	c2ans := 4
@@ -135,10 +135,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.HallUp,
 		},
-		driver.ElevState{
-			CurrentFloor: 1,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallUp},
+		driver.Elevator{
+			Floor:       1,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallUp},
 		},
 	)
 	c3ans := 1
@@ -148,10 +148,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.HallDown,
 		},
-		driver.ElevState{
-			CurrentFloor: 1,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallUp},
+		driver.Elevator{
+			Floor:       1,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallUp},
 		},
 	)
 	c4ans := 3
@@ -161,10 +161,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.Cab,
 		},
-		driver.ElevState{
-			CurrentFloor: 1,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallUp},
+		driver.Elevator{
+			Floor:       1,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallUp},
 		},
 	)
 	c5ans := 1
@@ -174,10 +174,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.Cab,
 		},
-		driver.ElevState{
-			CurrentFloor: 1,
-			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallDown},
+		driver.Elevator{
+			Floor:       1,
+			Direction:   driver.MD_Down,
+			ActiveOrder: order.Order{Type: order.HallDown},
 		},
 	)
 	c6ans := 3
@@ -187,10 +187,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.HallUp,
 		},
-		driver.ElevState{
-			CurrentFloor: 1,
-			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallDown},
+		driver.Elevator{
+			Floor:       1,
+			Direction:   driver.MD_Down,
+			ActiveOrder: order.Order{Type: order.HallDown},
 		},
 	)
 	c7ans := 3
@@ -200,10 +200,10 @@ func TestCost() {
 			TargetFloor: 1,
 			Type:        order.HallUp,
 		},
-		driver.ElevState{
-			CurrentFloor: 2,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallUp},
+		driver.Elevator{
+			Floor:       2,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallUp},
 		},
 	)
 	c8ans := 3
@@ -213,10 +213,10 @@ func TestCost() {
 			TargetFloor: 1,
 			Type:        order.HallDown,
 		},
-		driver.ElevState{
-			CurrentFloor: 2,
-			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallDown},
+		driver.Elevator{
+			Floor:       2,
+			Direction:   driver.MD_Down,
+			ActiveOrder: order.Order{Type: order.HallDown},
 		},
 	)
 	c9ans := 1
@@ -226,10 +226,10 @@ func TestCost() {
 			TargetFloor: 1,
 			Type:        order.HallUp,
 		},
-		driver.ElevState{
-			CurrentFloor: 2,
-			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallDown},
+		driver.Elevator{
+			Floor:       2,
+			Direction:   driver.MD_Down,
+			ActiveOrder: order.Order{Type: order.HallDown},
 		},
 	)
 	c10ans := 3
@@ -239,10 +239,10 @@ func TestCost() {
 			TargetFloor: 1,
 			Type:        order.Cab,
 		},
-		driver.ElevState{
-			CurrentFloor: 2,
-			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallDown},
+		driver.Elevator{
+			Floor:       2,
+			Direction:   driver.MD_Down,
+			ActiveOrder: order.Order{Type: order.HallDown},
 		},
 	)
 	c11ans := 1
@@ -252,10 +252,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.Cab,
 		},
-		driver.ElevState{
-			CurrentFloor: 2,
-			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallDown},
+		driver.Elevator{
+			Floor:       2,
+			Direction:   driver.MD_Down,
+			ActiveOrder: order.Order{Type: order.HallDown},
 		},
 	)
 	c12ans := 4
@@ -265,10 +265,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.Cab,
 		},
-		driver.ElevState{
-			CurrentFloor: 2,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallUp},
+		driver.Elevator{
+			Floor:       2,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallUp},
 		},
 	)
 	c13ans := 2
@@ -278,10 +278,10 @@ func TestCost() {
 			TargetFloor: 3,
 			Type:        order.HallDown,
 		},
-		driver.ElevState{
-			CurrentFloor: 1,
-			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallDown},
+		driver.Elevator{
+			Floor:       1,
+			Direction:   driver.MD_Down,
+			ActiveOrder: order.Order{Type: order.HallDown},
 		},
 	)
 	c14ans := 4
@@ -291,10 +291,10 @@ func TestCost() {
 			TargetFloor: 3,
 			Type:        order.HallDown,
 		},
-		driver.ElevState{
-			CurrentFloor: 3,
-			Direction:    driver.MD_Stop,
-			Order:        order.Order{Type: order.Cab, Status: order.Finished},
+		driver.Elevator{
+			Floor:       3,
+			Direction:   driver.MD_Stop,
+			ActiveOrder: order.Order{Type: order.Cab, Status: order.Finished},
 		},
 	)
 	c15ans := 0
@@ -304,10 +304,10 @@ func TestCost() {
 			TargetFloor: 0,
 			Type:        order.HallDown,
 		},
-		driver.ElevState{
-			CurrentFloor: 1,
-			Direction:    driver.MD_Stop,
-			Order:        order.Order{Type: order.HallUp, TargetFloor: 3},
+		driver.Elevator{
+			Floor:       1,
+			Direction:   driver.MD_Stop,
+			ActiveOrder: order.Order{Type: order.HallUp, TargetFloor: 3},
 		},
 	)
 	c16ans := 5
@@ -317,10 +317,10 @@ func TestCost() {
 			TargetFloor: 0,
 			Type:        order.Cab,
 		},
-		driver.ElevState{
-			CurrentFloor: 0,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallDown, TargetFloor: 2},
+		driver.Elevator{
+			Floor:       0,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallDown, TargetFloor: 2},
 		},
 	)
 	c17ans := 6
@@ -330,10 +330,10 @@ func TestCost() {
 			TargetFloor: 2,
 			Type:        order.HallDown,
 		},
-		driver.ElevState{
-			CurrentFloor: 0,
-			Direction:    driver.MD_Up,
-			Order:        order.Order{Type: order.HallDown, TargetFloor: 3},
+		driver.Elevator{
+			Floor:       0,
+			Direction:   driver.MD_Up,
+			ActiveOrder: order.Order{Type: order.HallDown, TargetFloor: 3},
 		},
 	)
 	c18ans := 4
@@ -343,10 +343,10 @@ func TestCost() {
 			TargetFloor: 3,
 			Type:        order.Cab,
 		},
-		driver.ElevState{
-			CurrentFloor: 3,
-			Direction:    driver.MD_Down,
-			Order:        order.Order{Type: order.HallUp, TargetFloor: 1},
+		driver.Elevator{
+			Floor:       3,
+			Direction:   driver.MD_Down,
+			ActiveOrder: order.Order{Type: order.HallUp, TargetFloor: 1},
 		},
 	)
 	c19ans := 6

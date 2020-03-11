@@ -88,12 +88,12 @@ func main() {
 	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
 	flag.Parse()
 
-	buttonOrderChan := make(chan order.Order)
+	mainElevatorChan := make(chan driver.Elevator)
 	execOrderChan := make(chan order.Order)
-	stateChan := make(chan driver.ElevState)
-	go driver.Driver(*port, buttonOrderChan, execOrderChan, stateChan)
+	buttonPressChan := make(chan order.Order)
+	go driver.Driver(*port, mainElevatorChan, execOrderChan, buttonPressChan)
 
-	var state driver.ElevState
+	var elev driver.Elevator
 	var lowerCostReplySentID int64
 
 	// Combine network and driver
@@ -109,19 +109,16 @@ func main() {
 
 	for {
 		select {
-		case state = <-stateChan:
-			log.Printf("New state: %v\n", state)
+		case elev = <-mainElevatorChan:
+			log.Printf("New state: %v\n", elev)
 
-			if state.Order.Status == order.Finished {
-				localOrderDequeueChan <- state.Order
+			if elev.ActiveOrder.Status == order.Finished {
+				localOrderEnqueueChan <- elev.ActiveOrder
 			}
 
-		case ord := <-buttonOrderChan:
+		case ord := <-buttonPressChan:
 			// TODO: move formatting to function
-			ord.ID = time.Now().UnixNano()
-			ord.Status = order.InitialBroadcast
-			ord.Cost = costfunction.Cost(ord, state)
-
+			ord.Cost = costfunction.Cost(ord, elev)
 			localOrderEnqueueChan <- ord
 
 			// if cab order, no need to broadcast
@@ -138,7 +135,7 @@ func main() {
 
 			switch ord.Status {
 			case order.InitialBroadcast:
-				cost := costfunction.Cost(ord, state)
+				cost := costfunction.Cost(ord, elev)
 				log.Printf("Own cost: %d\n", cost)
 				if cost < ord.Cost {
 					ord.Status = order.LowerCostReply

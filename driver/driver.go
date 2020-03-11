@@ -147,7 +147,7 @@ func driverInit(port int, drvButtons chan elevio.ButtonEvent, drvFloors chan int
 // and sends the information to a higher level.
 // TODO: re-write this
 func Driver(port int, mainElevatorChan chan<- Elevator,
-	newOrderChan <-chan order.Order, buttonPressChan chan<- order.Order) {
+	execOrderChan <-chan order.Order, buttonPressChan chan<- order.Order) {
 
 	var elev Elevator
 	elev.State = Init
@@ -169,7 +169,7 @@ func Driver(port int, mainElevatorChan chan<- Elevator,
 			elev = floorChange(elev, newFloor)
 			updateElev = true
 
-		case o := <-newOrderChan:
+		case o := <-execOrderChan:
 			elev = orderFromMain(elev, o)
 			updateElev = true
 
