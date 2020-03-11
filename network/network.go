@@ -1,11 +1,11 @@
-package main
+package network
 
 import (
-	"fmt"
-	"time"
 	"./bcast"
 )
 
+// Network starts the transmitter and receiver threads used for sending and
+// receiving orders.
 func Network(port int, txChan chan interface{}, rxChans ...interface{}) {
 	bcast.InitLogger()
 
