@@ -3,7 +3,6 @@ package queue
 import (
 	"container/list"
 	"log"
-
 	"../elevTypes/order"
 )
 
@@ -21,7 +20,6 @@ func enqueue(queue *list.List, ord order.Order) bool {
 
 	for e := queue.Front(); e != nil; e = e.Next() {
 		if e.Value.(order.Order).Cost > ord.Cost {
-			// fmt.Println(e.Value.(order.Order).Cost)
 			queue.InsertBefore(ord, e)
 			if e == queue.Front() {
 				return true
@@ -60,6 +58,19 @@ func dequeue(queue *list.List, ord order.Order) {
 	}
 }
 
+
+// Dequeues and returns first order
+func dequeueFirst(queue *list.List) order.Order{
+
+	//get first element and remove it from the queue
+	e:= queue.Front()
+	queue.Remove(e)
+	
+	return e.Value.(order.Order)
+}
+
+
+
 // Prints queue
 func printQueue(queue *list.List) {
 	log.Println("********** QUEUEUEUEUUEUE *********")
@@ -77,13 +88,15 @@ func getNextOrder(queue *list.List) order.Order {
 }
 
 // Queue listens for incoming orders or signals on the channels and acts accordingly.
-// * OrderEnqueue: enqueues sent order
-// * OrderDequeue: if anything is sent on channel, dequeue/delete first element
-// * NextOrder: the order at the front of the queue
+// * OrderEnqueue	: enqueues sent order
+// * OrderDequeue	: if anything is sent on channel, dequeue/delete first element
+// * NextOrder		: the order at the front of the queue
+// * FlushQueue		: If true the entire queue will be sent out on NextOrder
 func Queue(
 	OrderEnqueue <-chan order.Order,
 	OrderDequeue <-chan order.Order,
-	NextOrder chan<- order.Order) {
+	NextOrder chan<- order.Order,
+	FlushQueue <- chan bool) {
 
 	//Queue Init
 	queue := list.New()
@@ -94,7 +107,7 @@ func Queue(
 			insertedAtFront := enqueue(queue, newOrder)
 			log.Printf("Add order to queue: %#v\n", newOrder)
 			printQueue(queue)
-
+			
 			if insertedAtFront {
 				NextOrder <- getNextOrder(queue)
 			}
@@ -108,6 +121,17 @@ func Queue(
 				NextOrder <- ord
 			}
 
+		case flush := <-FlushQueue:
+
+			//If received flush == true, the whole queue will be flushed to getNextOrder
+			if flush == true {
+				queueLen := queue.Len()				//store length of queue before dequeing the queue
+				for i := 0; i < (queueLen); i++ {
+					
+					NextOrder <-dequeueFirst(queue) //Remove one order and sent it to main
+				}
+			}
+			log.Println("****Flushed queue****")
 			printQueue(queue)
 		}
 	}
