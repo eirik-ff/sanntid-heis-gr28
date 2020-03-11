@@ -44,6 +44,7 @@ type Elevator struct {
 	Floor       int
 	Direction   MotorDirection
 	State       State
+	Orders      [][]order.Order
 }
 
 func orderFromMain(elev Elevator, ord order.Order) Elevator {
@@ -182,7 +183,7 @@ func driverInit(port int, drvButtons chan elevio.ButtonEvent, drvFloors chan int
 // Driver is the main function of the package. It reads the low level channels
 // and sends the information to a higher level.
 // TODO: re-write this
-func Driver(port int, mainElevatorChan chan<- Elevator,
+func Driver(port int, Nfloors, Nbuttons int, mainElevatorChan chan<- Elevator,
 	execOrderChan <-chan order.Order, buttonPressChan chan<- order.Order) {
 
 	var elev Elevator

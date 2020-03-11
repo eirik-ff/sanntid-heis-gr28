@@ -23,6 +23,11 @@ const (
 	wdTimerInterval time.Duration = 500 * time.Millisecond
 )
 
+var (
+	Nfloors  int
+	Nbuttons int
+)
+
 func setupLog() (*os.File, error) {
 	usr, err := user.Current()
 	if err != nil {
@@ -86,12 +91,17 @@ func main() {
 
 	// Init driver
 	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
+	NfloorsFlag := flag.Int("floors", 4, "Number of floors per elevator")
+	NbuttonsFlag := flag.Int("buttons", 3, "Number of button types per elevator (e.g. all up, hall down, cab call)")
 	flag.Parse()
+
+	Nfloors = *NfloorsFlag
+	Nbuttons = *NbuttonsFlag
 
 	mainElevatorChan := make(chan driver.Elevator, 100)
 	execOrderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
-	go driver.Driver(*port, mainElevatorChan, execOrderChan, buttonPressChan)
+	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, execOrderChan, buttonPressChan)
 
 	var elev driver.Elevator
 	var lowerCostReplySentID int64
