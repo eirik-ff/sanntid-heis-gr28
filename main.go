@@ -11,12 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"./costfunction"
 	"./driver"
 	"./elevTypes/order"
 	"./network"
 	"./network/bcast"
-	"./queue"
 )
 
 const (
@@ -27,6 +25,11 @@ var (
 	Nfloors  int
 	Nbuttons int
 )
+
+func readElevatorFromFile() driver.Elevator {
+	// TODO: implement this function
+	return driver.Elevator{}
+}
 
 func setupLog() (*os.File, error) {
 	usr, err := user.Current()
@@ -69,9 +72,6 @@ func logPID() {
 }
 
 func main() {
-	// costfunction.TestCost()
-	// return
-
 	logFile, err := setupLog()
 	if err != nil {
 		fmt.Println("Error setting up log")
@@ -91,86 +91,61 @@ func main() {
 
 	// Init driver
 	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
-	NfloorsFlag := flag.Int("floors", 4, "Number of floors per elevator")
-	NbuttonsFlag := flag.Int("buttons", 3, "Number of button types per elevator (e.g. all up, hall down, cab call)")
+	nfloors := flag.Int("floors", 4, "Number of floors per elevator")
+	nbuttons := flag.Int("buttons", 3, "Number of button types per elevator (e.g. all up, hall down, cab call)")
+	readFile := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
 	flag.Parse()
 
-	Nfloors = *NfloorsFlag
-	Nbuttons = *NbuttonsFlag
+	Nfloors = *nfloors
+	Nbuttons = *nbuttons
 
 	mainElevatorChan := make(chan driver.Elevator, 100)
-	execOrderChan := make(chan order.Order, 100)
+	orderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
-	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, execOrderChan, buttonPressChan)
-
-	var elev driver.Elevator
-	var lowerCostReplySentID int64
+	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan)
+	time.Sleep(1 * time.Millisecond)
 
 	// Combine network and driver
 	txChan := make(chan interface{})
 	networkOrderChan := make(chan order.Order)
 	go network.Network(20028, txChan, networkOrderChan)
 
-	// Init order
-	localOrderEnqueueChan := make(chan order.Order, 100)
-	localOrderDequeueChan := make(chan order.Order, 100)
-	localNextOrderChan := make(chan order.Order, 100)
-	go queue.Queue(localOrderEnqueueChan, localOrderDequeueChan, localNextOrderChan)
-
+	var elev driver.Elevator
+	if *readFile {
+		elev = readElevatorFromFile() // TODO: implement this function
+	}
+	var lastOrder order.Order
 	for {
 		select {
 		case elev = <-mainElevatorChan:
-			log.Printf("New state: %v\n", elev)
+			log.Printf("New elevator: %#v f:%#v d:%#v s:%#v\n",
+				elev.ActiveOrder, elev.Floor, elev.Direction, elev.State)
+			log.Println(driver.OrderMatrixToString(elev))
 
 			if elev.ActiveOrder.Status == order.Finished {
-				localOrderDequeueChan <- elev.ActiveOrder
-
 				txChan <- elev.ActiveOrder
 			}
 
 		case ord := <-buttonPressChan:
-			// TODO: move formatting to function
-			ord.Cost = costfunction.Cost(ord, elev)
-			localOrderEnqueueChan <- ord
-
 			// if cab order, no need to broadcast
 			if ord.Type != order.Cab {
-				txChan <- ord
+				// status is set to NotTaken in buttonPress in driver
+				ord.Status = order.InitialBroadcast
+				txChan <- ord // this also sends to myself
 			}
 
-		case nextOrder := <-localNextOrderChan:
-			log.Printf("Next order to execute: %#v\n", nextOrder)
-			execOrderChan <- nextOrder
+			// TODO: might not be necessary since my own packets are received
+			// 		 and matrix is updated in buttonPress in driver for cab calls
+			// orderChan <- ord
 
 		case ord := <-networkOrderChan:
 			log.Printf("Received order from network: %#v\n", ord)
+			// orderChan <- ord
 
-			switch ord.Status {
-			case order.InitialBroadcast:
-				lightOrder := ord
-				lightOrder.Status = order.LightChange
-				execOrderChan <- lightOrder
+			// if message has status not taken, add that to the matrix
+			// if message has status finished, add that to matrix and handle
+			// the same must happen either way
 
-				cost := costfunction.Cost(ord, elev)
-				log.Printf("Own cost: %d\n", cost)
-				if cost < ord.Cost {
-					ord.Status = order.LowerCostReply
-					ord.Cost = cost
-
-					// if lower cost, save ID so you won't abort your own order
-					lowerCostReplySentID = ord.ID
-
-					localOrderEnqueueChan <- ord
-					txChan <- ord
-					log.Printf("Sending lower cost reply with cost: %d\n", cost)
-				}
-			case order.LowerCostReply:
-				if ord.ID != lowerCostReplySentID {
-					localOrderDequeueChan <- ord
-				}
-			case order.Finished:
-				execOrderChan <- ord
-			}
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
 			wdTimer.Reset(wdTimerInterval)
@@ -178,6 +153,71 @@ func main() {
 		case sig := <-sigs:
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())
 			return
+
+		default:
+			// send next order if not currently active order
+			o := findNextOrder(elev)
+			if o.Status != order.Invalid && o != lastOrder {
+				fmt.Printf("Order to exec: %#v\n", o)
+				lastOrder = o
+				orderChan <- o
+			}
 		}
 	}
+}
+
+func orderBelow(elev driver.Elevator) (int, int) {
+	for f := elev.Floor - 1; f >= 0; f-- {
+		for i := range elev.Orders[f] {
+			if elev.Orders[f][i].Status == order.NotTaken {
+				return f, i
+			}
+		}
+	}
+
+	return -1, -1
+}
+
+func orderAbove(elev driver.Elevator) (int, int) {
+	for f := elev.Floor + 1; f < 4; f++ {
+		for i := range elev.Orders[f] {
+			if elev.Orders[f][i].Status == order.NotTaken {
+				return f, i
+			}
+		}
+	}
+
+	return -1, -1
+}
+
+func orderAtFloor(elev driver.Elevator) (int, int) {
+	for i := range elev.Orders[elev.Floor] {
+		if elev.Orders[elev.Floor][i].Status == order.NotTaken {
+			return elev.Floor, i
+		}
+	}
+	return -1, -1
+}
+
+func findNextOrder(elev driver.Elevator) order.Order {
+	// TODO: re-write this to use one of the algorithms on github
+
+	// this is currently a simple, dumb implementation that simply looks if
+	// there are orders above, go up. if below, go down.
+	f, t := -1, -1
+	if elev.Direction == driver.MD_Down {
+		f, t = orderBelow(elev)
+	} else if elev.Direction == driver.MD_Up {
+		f, t = orderAbove(elev)
+	} else {
+		f, t = orderAtFloor(elev)
+	}
+
+	o := order.Order{Floor: f, Type: t, Status: order.Execute}
+	if f < 0 || t < 0 {
+		// no orders exist
+		o.Status = order.Invalid
+	}
+
+	return o
 }
