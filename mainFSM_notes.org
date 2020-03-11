@@ -1,0 +1,51 @@
+* Main
+** Normal
+*** Events
+**** Updated elevator state
+***** Causes
+Active order changed
+Order matrix changed
+Floor changed
+Direction changed
+State changed
+Error state
+***** Need to
+Reevaluate which order is the most optimal to serve. 
+*If finish* (On finishing an order, its the drivers responsibility to remove it from the order queue before sending its state to main.)
+- Broadcast the active order on the network (txChan) (So that other elevators can set the order status to *notTaken*)
+
+*If error*
+- Send out all orders to network
+- Go to error state
+**** Button pressed
+***** Causes 
+New button press (which results in a new order)
+***** Need to
+- Broadcast the new order on the network (txChan)
+- Set the sate of the order to *notTaken*
+- Send the new elevator state to the driver
+
+**** Received network message
+***** Causes
+New order
+Someone stared a new order
+Someone finished an order
+
+***** We need to
+****** If new order
+- It to out order matrix
+- Send the new elevator state to the driver
+****** If someone started a new order
+- Set the status of that order to *taken* in the order matrix.
+- Send the new elevator state to the driver
+****** If someone finished an order
+- Remove the order from the order matrix
+- Send the new elevator state to the driver
+
+** Error
+In this state the order matrix should be sent over the network so that other elevators can take the orders.
+
+*** If the motor timeout caused the error
+We need to try the motor until it is working again.
+
+*Then go back to normal operation*
