@@ -3,8 +3,19 @@ package queue
 import (
 	"container/list"
 	"log"
+	"strings"
 
 	"../elevTypes/order"
+
+	"encoding/json"
+	"io/ioutil"
+
+	"os"
+)
+
+var (
+	newFile *os.File
+	err     error
 )
 
 // Enqueues new order
@@ -73,6 +84,52 @@ func printQueue(queue *list.List) {
 
 func getNextOrder(queue *list.List) order.Order {
 	return queue.Front().Value.(order.Order)
+
+}
+
+func writeToFile(queue *list.List) {
+
+	//deliting old file
+	os.Remove("currentQueue.txt")
+
+	//creating new file
+	queueFile, _ := os.OpenFile("currentQueue.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+	defer queueFile.Close()
+
+	//adding all elements in queue to file
+	for e := queue.Front(); e != nil; e = e.Next() {
+		msg, _ := json.Marshal(e.Value.(order.Order))
+		if _, err := queueFile.Write([]byte(msg)); err != nil {
+			log.Fatal(err)
+		}
+		queueFile.WriteString("\n")
+	}
+
+	queueFile.Close()
+
+}
+
+func readFromFile(queue *list.List) {
+
+	//opening file
+	queueFile, _ := os.Open("currentQueue.txt")
+
+	data, _ := ioutil.ReadAll(queueFile)
+
+	queueStrings := strings.Split(string(data), "\n")
+
+	//adding all elements from file to queue
+	for i := 0; i < len(queueStrings)-1; i++ {
+		var temp order.Order
+		json.Unmarshal([]byte(queueStrings[i]), &temp)
+		//fmt.Println(queueStrings[i])
+		//fmt.Println(test)
+		queue.PushBack(temp)
+
+	}
+
+	queueFile.Close()
 
 }
 
