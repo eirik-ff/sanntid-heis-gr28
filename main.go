@@ -88,8 +88,8 @@ func main() {
 	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
 	flag.Parse()
 
-	mainElevatorChan := make(chan driver.Elevator)
-	execOrderChan := make(chan order.Order)
+	mainElevatorChan := make(chan driver.Elevator, 100)
+	execOrderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
 	go driver.Driver(*port, mainElevatorChan, execOrderChan, buttonPressChan)
 
@@ -102,9 +102,9 @@ func main() {
 	go network.Network(20028, txChan, networkOrderChan)
 
 	// Init order
-	localOrderEnqueueChan := make(chan order.Order)
-	localOrderDequeueChan := make(chan order.Order)
-	localNextOrderChan := make(chan order.Order)
+	localOrderEnqueueChan := make(chan order.Order, 100)
+	localOrderDequeueChan := make(chan order.Order, 100)
+	localNextOrderChan := make(chan order.Order, 100)
 	go queue.Queue(localOrderEnqueueChan, localOrderDequeueChan, localNextOrderChan)
 
 	for {
@@ -113,7 +113,9 @@ func main() {
 			log.Printf("New state: %v\n", elev)
 
 			if elev.ActiveOrder.Status == order.Finished {
-				localOrderEnqueueChan <- elev.ActiveOrder
+				localOrderDequeueChan <- elev.ActiveOrder
+
+				txChan <- elev.ActiveOrder
 			}
 
 		case ord := <-buttonPressChan:
@@ -135,6 +137,10 @@ func main() {
 
 			switch ord.Status {
 			case order.InitialBroadcast:
+				lightOrder := ord
+				lightOrder.Status = order.LightChange
+				execOrderChan <- lightOrder
+
 				cost := costfunction.Cost(ord, elev)
 				log.Printf("Own cost: %d\n", cost)
 				if cost < ord.Cost {
@@ -152,6 +158,8 @@ func main() {
 				if ord.ID != lowerCostReplySentID {
 					localOrderDequeueChan <- ord
 				}
+			case order.Finished:
+				execOrderChan <- ord
 			}
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"

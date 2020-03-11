@@ -58,6 +58,12 @@ func orderFromMain(elev Elevator, ord order.Order) Elevator {
 		elevio.SetButtonLamp(elevio.ButtonType(ord.Type), ord.TargetFloor, false)
 		log.Printf("Clear light on order with status Finished. Floor %d Type %d\n", ord.TargetFloor, ord.Type)
 		return elev
+	} else if ord.Status == order.Abort {
+		elevio.SetMotorDirection(elevio.MD_Stop)
+		elev.Direction = MD_Stop
+		elev.ActiveOrder = ord
+		elev.State = Idle
+		return elev
 	}
 
 	elev.ActiveOrder = ord
@@ -65,6 +71,25 @@ func orderFromMain(elev Elevator, ord order.Order) Elevator {
 	if elev.State == Idle {
 		elev.State = Moving
 	}
+
+	return elev
+}
+
+func arrivedAtTarget(elev Elevator) Elevator {
+	elevio.SetMotorDirection(elevio.MD_Stop)
+	motorTimer.Stop() // TODO: look into motor timer
+	elev.Direction = MD_Stop
+
+	log.Println("Arrived at target floor")
+
+	elev.ActiveOrder.Status = order.Finished
+	elevio.SetButtonLamp(elevio.ButtonType(elev.ActiveOrder.Type),
+		elev.ActiveOrder.TargetFloor, false)
+	elevio.SetButtonLamp(elevio.BT_Cab, elev.ActiveOrder.TargetFloor, false)
+
+	elevio.SetDoorOpenLamp(true)
+	doorTimer.Reset(doorTimeout) // TODO: look into door timer
+	elev.State = DoorOpen
 
 	return elev
 }
@@ -78,18 +103,7 @@ func floorChange(elev Elevator, newFloor int) Elevator {
 	log.Printf("New floor: %d\n", newFloor)
 
 	if newFloor == elev.ActiveOrder.TargetFloor {
-		elevio.SetMotorDirection(elevio.MD_Stop)
-		motorTimer.Stop() // TODO: look into motor timer
-
-		log.Println("Arrived at target floor")
-
-		elev.ActiveOrder.Status = order.Finished
-		elevio.SetButtonLamp(elevio.ButtonType(elev.ActiveOrder.Type),
-			elev.ActiveOrder.TargetFloor, false)
-
-		elevio.SetDoorOpenLamp(true)
-		doorTimer.Reset(doorTimeout) // TODO: look into door timer
-		elev.State = DoorOpen
+		elev = arrivedAtTarget(elev)
 	} else {
 		elev.State = Moving
 	}
@@ -127,6 +141,28 @@ func motorTimeout(elev Elevator) Elevator {
 	return elev
 }
 
+func setDirection(elev Elevator) (Elevator, bool) {
+	var updateElev bool = false
+	var d elevio.MotorDirection
+	if elev.ActiveOrder.TargetFloor > elev.Floor {
+		d = elevio.MD_Up
+	} else if elev.ActiveOrder.TargetFloor < elev.Floor {
+		d = elevio.MD_Down
+	} else {
+		elev = arrivedAtTarget(elev)
+		updateElev = true
+	}
+
+	if elev.Direction != MotorDirection(d) {
+		elevio.SetMotorDirection(d)
+
+		elev.Direction = MotorDirection(d)
+		updateElev = true
+	}
+
+	return elev, updateElev
+}
+
 // Initialized driver channels for low level communication
 // and starts goroutines for polling hardware.
 func driverInit(port int, drvButtons chan elevio.ButtonEvent, drvFloors chan int) {
@@ -152,19 +188,24 @@ func Driver(port int, mainElevatorChan chan<- Elevator,
 	var elev Elevator
 	elev.State = Init
 
-	drvButtons := make(chan elevio.ButtonEvent, 10)
+	drvButtons := make(chan elevio.ButtonEvent)
 	drvFloors := make(chan int)
 	driverInit(port, drvButtons, drvFloors)
+
+	// ButtonPress creates an order and sends it to main
+	go func() {
+		for {
+			press := <-drvButtons
+			o := buttonPress(press)
+			buttonPressChan <- o
+		}
+	}()
 
 	elev.State = Idle
 	var updateElev bool = false
 	for {
 		// Capture events
 		select {
-		case press := <-drvButtons:
-			o := buttonPress(press)
-			buttonPressChan <- o
-
 		case newFloor := <-drvFloors:
 			elev = floorChange(elev, newFloor)
 			updateElev = true
@@ -180,6 +221,9 @@ func Driver(port int, mainElevatorChan chan<- Elevator,
 		case <-motorTimer.C:
 			elev = motorTimeout(elev)
 			updateElev = true
+
+		default:
+			// do nothing
 		}
 
 		// Send new elevator object to main
@@ -193,19 +237,16 @@ func Driver(port int, mainElevatorChan chan<- Elevator,
 		// Act according to new state
 		switch elev.State {
 		case Idle:
-			if elev.ActiveOrder.Status != order.Finished {
+			if !(elev.ActiveOrder.Status == order.Finished || elev.ActiveOrder.Status == order.Abort) {
+				// log.Println("In IDLE - active order not finished - going to moving")
 				// will come into effect at next iteration
 				elev.State = Moving
 				updateElev = true
 			}
 		case Moving:
-			var d elevio.MotorDirection
-			if elev.ActiveOrder.TargetFloor > elev.Floor {
-				d = elevio.MD_Up
-			} else if elev.ActiveOrder.TargetFloor < elev.Floor {
-				d = elevio.MD_Down
-			}
-			elevio.SetMotorDirection(d)
+			// log.Println("In MOVING")
+			// log.Println("Active order:  ", elev.ActiveOrder)
+			elev, updateElev = setDirection(elev)
 
 		case DoorOpen:
 			// do nothing, everything happens in transition/on events
