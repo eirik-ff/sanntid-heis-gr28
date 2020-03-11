@@ -1,5 +1,3 @@
-// Package driver is for interfacing with low level hardware
-// and to handle switching lights and acting on orders.
 package driver
 
 import (
@@ -21,153 +19,201 @@ const (
 	MD_Stop = MotorDirection(elevio.MD_Stop)
 )
 
-// ElevState is a struct with the current position and active order of
-// the elevator.
-type ElevState struct {
-	Order        order.Order
-	CurrentFloor int
-	Direction    MotorDirection
-}
-
 const (
 	floorChangeTimeout time.Duration = 5 * time.Second // TODO: Measure suitable value for floorChangeTimeout
 	doorTimeout        time.Duration = 3 * time.Second
 )
 
-var (
-	drvButtons chan elevio.ButtonEvent
-	drvFloors  chan int
-	drvObstr   chan bool
-	drvStop    chan bool
-
-	floorMonitorChan chan ElevState
-	updatedStateChan chan ElevState
+var ( // TODO: look at making these local in Driver
+	doorTimer  *time.Timer
+	motorTimer *time.Timer
 )
+
+type State int
+
+const (
+	Init     State = 0
+	Idle     State = 1
+	Moving   State = 2
+	DoorOpen State = 3
+	Error    State = 4
+)
+
+type Elevator struct {
+	ActiveOrder order.Order
+	Floor       int
+	Direction   MotorDirection
+	State       State
+}
+
+func orderFromMain(elev Elevator, ord order.Order) Elevator {
+	log.Printf("New order from main: %#v\n", ord)
+
+	if ord.Status == order.LightChange {
+		elevio.SetButtonLamp(elevio.ButtonType(ord.Type), ord.TargetFloor, true)
+		log.Printf("Set light on order with status LightChange. Floor %d Type %d\n", ord.TargetFloor, ord.Type)
+		return elev // no change in state, but still needs to return something
+	} else if ord.Status == order.Finished {
+		// another elevator on the network has finished an order
+		elevio.SetButtonLamp(elevio.ButtonType(ord.Type), ord.TargetFloor, false)
+		log.Printf("Clear light on order with status Finished. Floor %d Type %d\n", ord.TargetFloor, ord.Type)
+		return elev
+	}
+
+	elev.ActiveOrder = ord
+	log.Printf("Set new active order with ID: %d\n", ord.ID)
+	if elev.State == Idle {
+		elev.State = Moving
+	}
+
+	return elev
+}
+
+// can only happen in state Moving
+func floorChange(elev Elevator, newFloor int) Elevator {
+	elevio.SetFloorIndicator(newFloor)
+	motorTimer.Reset(floorChangeTimeout) // TODO: look into motor timer
+
+	elev.Floor = newFloor
+	log.Printf("New floor: %d\n", newFloor)
+
+	if newFloor == elev.ActiveOrder.TargetFloor {
+		elevio.SetMotorDirection(elevio.MD_Stop)
+		motorTimer.Stop() // TODO: look into motor timer
+
+		log.Println("Arrived at target floor")
+
+		elev.ActiveOrder.Status = order.Finished
+		elevio.SetButtonLamp(elevio.ButtonType(elev.ActiveOrder.Type),
+			elev.ActiveOrder.TargetFloor, false)
+
+		elevio.SetDoorOpenLamp(true)
+		doorTimer.Reset(doorTimeout) // TODO: look into door timer
+		elev.State = DoorOpen
+	} else {
+		elev.State = Moving
+	}
+	return elev
+}
+
+// state independent
+func buttonPress(press elevio.ButtonEvent) order.Order {
+	elevio.SetButtonLamp(press.Button, press.Floor, true)
+
+	o := order.NewOrder(order.Type(press.Button), press.Floor, order.InitialBroadcast)
+
+	log.Printf("Button press: %#v\n", o)
+
+	return o
+}
+
+// can only happen in state DoorOpen
+func doorClose(elev Elevator) Elevator {
+	doorTimer.Stop() // TODO: look into door timer
+	elevio.SetDoorOpenLamp(false)
+	elev.State = Idle
+
+	log.Println("Door closing")
+
+	return elev
+}
+
+func motorTimeout(elev Elevator) Elevator {
+	log.Println("Motor timed out!!")
+
+	elevio.SetMotorDirection(elevio.MD_Stop)
+	elev.State = Error
+
+	return elev
+}
 
 // Initialized driver channels for low level communication
 // and starts goroutines for polling hardware.
-func driverInit(port int) {
-	elevio.Init(fmt.Sprintf("localhost:%d", port), 4) // TODO: CHANGE CHANGE CHANGE
+func driverInit(port int, drvButtons chan elevio.ButtonEvent, drvFloors chan int) {
+	elevio.Init(fmt.Sprintf("localhost:%d", port), 4)
 
-	drvButtons = make(chan elevio.ButtonEvent, 10)
-	drvFloors = make(chan int)
-	drvObstr = make(chan bool)
-	drvStop = make(chan bool)
-	floorMonitorChan = make(chan ElevState)
-	updatedStateChan = make(chan ElevState, 1) // This have caused problems if unbuffered
+	motorTimer = time.NewTimer(floorChangeTimeout)
+	doorTimer = time.NewTimer(doorTimeout)
+	motorTimer.Stop()
+	doorTimer.Stop()
 
 	go elevio.PollButtons(drvButtons)
 	go elevio.PollFloorSensor(drvFloors)
-	go elevio.PollObstructionSwitch(drvObstr)
-	go elevio.PollStopButton(drvStop)
-	go monitorFloor(floorMonitorChan, updatedStateChan)
 
 	log.Printf("Driver initialized")
 }
 
-// Function for checking if at target floor.
-func monitorFloor(floorMonitorChan <-chan ElevState, stateChan chan<- ElevState) {
-	var d elevio.MotorDirection
-	floorChangeTimer := time.NewTimer(floorChangeTimeout)
-	floorChangeTimer.Stop()
-	for {
-		select {
-		case state := <-floorMonitorChan:
-			if state.Order.Status == order.Abort {
-				d = elevio.MD_Stop
-				floorChangeTimer.Stop()
-				log.Println("Aborting order")
-			} else if state.CurrentFloor == state.Order.TargetFloor {
-				d = elevio.MD_Stop
-				log.Println("Arrived at floor, stopping motor")
-				floorChangeTimer.Stop()
-
-				elevio.SetButtonLamp(order.Cab, state.CurrentFloor, false)
-				elevio.SetButtonLamp(elevio.ButtonType(state.Order.Type), state.CurrentFloor, false)
-
-				state.Order.Status = order.Finished
-
-			} else if state.CurrentFloor < state.Order.TargetFloor {
-				d = elevio.MD_Up
-			} else {
-				d = elevio.MD_Down
-			}
-
-			elevio.SetMotorDirection(d)
-			log.Printf("Setting motor in direction %#v to get to target floor %d\n", d, state.Order.TargetFloor)
-			elevio.SetFloorIndicator(state.CurrentFloor)
-
-			state.Direction = MotorDirection(d)
-			stateChan <- state // this blocks if channel is unbuffered
-
-			if d != elevio.MD_Stop {
-				floorChangeTimer.Stop()
-				floorChangeTimer.Reset(floorChangeTimeout)
-			} else if d == elevio.MD_Stop && state.Order.Status != order.Abort {
-				elevio.SetDoorOpenLamp(true)
-				log.Println("Opening door")
-				<-time.After(doorTimeout)
-
-				// for now, door is not active as it causes some head ache. if more
-				// than one order comes when the door is open, they do no light up
-				// before the door closes again (given that drvButtons are buffered)
-				// this must be fixed later by maybe separating motor and light
-				// activation code, but for now, we just ignore it and handle it
-				// later
-				// TODO: OBS, dette må vi gjøre noe med! :O
-
-				elevio.SetDoorOpenLamp(false)
-				log.Println("Closing door")
-			}
-
-		case <-floorChangeTimer.C:
-			log.Println("floorChangeTimer timed out")
-			// TODO: tell someone else about this (report an error or something)
-		}
-	}
-}
-
 // Driver is the main function of the package. It reads the low level channels
 // and sends the information to a higher level.
-func Driver(port int,
-	getOrderChan chan<- order.Order,
-	execOrderChan <-chan order.Order,
-	externalStateChan chan<- ElevState) {
+// TODO: re-write this
+func Driver(port int, mainElevatorChan chan<- Elevator,
+	newOrderChan <-chan order.Order, buttonPressChan chan<- order.Order) {
 
-	driverInit(port)
-	var state ElevState
+	var elev Elevator
+	elev.State = Init
 
+	drvButtons := make(chan elevio.ButtonEvent, 10)
+	drvFloors := make(chan int)
+	driverInit(port, drvButtons, drvFloors)
+
+	elev.State = Idle
+	var updateElev bool = false
 	for {
+		// Capture events
 		select {
-		case btnEvent := <-drvButtons:
-			o := order.Order{
-				TargetFloor: btnEvent.Floor,
-				Type:        order.Type(btnEvent.Button),
-			}
-			getOrderChan <- o
-			elevio.SetButtonLamp(btnEvent.Button, btnEvent.Floor, true) // turn on button lamp
-
-			log.Printf("Received button press: %#v\n", o)
+		case press := <-drvButtons:
+			o := buttonPress(press)
+			buttonPressChan <- o
 
 		case newFloor := <-drvFloors:
-			state.CurrentFloor = newFloor
-			elevio.SetFloorIndicator(state.CurrentFloor) // Set floor indicator to current floor
-			floorMonitorChan <- state                    // Start monitorFloor
+			elev = floorChange(elev, newFloor)
+			updateElev = true
 
-			log.Printf("Arrived at new floor: %#v\n", state.CurrentFloor)
+		case o := <-newOrderChan:
+			elev = orderFromMain(elev, o)
+			updateElev = true
 
-		case ord := <-execOrderChan:
-			if ord.Status != order.Abort {
-				elevio.SetButtonLamp(elevio.ButtonType(ord.Type), ord.TargetFloor, true) // turn on button lamp
+		case <-doorTimer.C:
+			elev = doorClose(elev)
+			updateElev = true
+
+		case <-motorTimer.C:
+			elev = motorTimeout(elev)
+			updateElev = true
+		}
+
+		// Send new elevator object to main
+		if updateElev {
+			log.Printf("Elevator object update: %#v\n", elev)
+
+			mainElevatorChan <- elev
+			updateElev = false
+		}
+
+		// Act according to new state
+		switch elev.State {
+		case Idle:
+			if elev.ActiveOrder.Status != order.Finished {
+				// will come into effect at next iteration
+				elev.State = Moving
+				updateElev = true
 			}
+		case Moving:
+			var d elevio.MotorDirection
+			if elev.ActiveOrder.TargetFloor > elev.Floor {
+				d = elevio.MD_Up
+			} else if elev.ActiveOrder.TargetFloor < elev.Floor {
+				d = elevio.MD_Down
+			}
+			elevio.SetMotorDirection(d)
 
-			state.Order = ord
-			floorMonitorChan <- state // Start monitorFloor
-
-			log.Printf("Received new order: %#v\n", ord)
-
-		case state = <-updatedStateChan:
-			externalStateChan <- state
+		case DoorOpen:
+			// do nothing, everything happens in transition/on events
+		case Error:
+			fallthrough
+		default: // unknown state
+			// TODO: something that happend should not have happened, send
+			// 		 error to main
 		}
 	}
 }
