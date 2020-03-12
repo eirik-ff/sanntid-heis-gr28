@@ -257,7 +257,9 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- Elevator,
 		// Act according to new state
 		switch elev.State {
 		case Idle:
-			if !(elev.ActiveOrder.Status == order.Finished || elev.ActiveOrder.Status == order.Abort) {
+			if !(elev.ActiveOrder.Status == order.Finished ||
+				elev.ActiveOrder.Status == order.Abort ||
+				elev.ActiveOrder.Status == order.Invalid) {
 				// will come into effect at next iteration
 				elev.State = Moving
 				updateElev = true
