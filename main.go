@@ -155,7 +155,10 @@ func main() {
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())
 			return
 
-		default:
+		case <-time.After(50 * time.Millisecond):
+			// My computer spun up a lot if this is runs every time there is no
+			// other event.
+
 			// send next order if not currently active order
 			o := findNextOrder(elev)
 			if o.Status != order.Invalid && o != lastOrder {
