@@ -103,14 +103,15 @@ func main() {
 	orderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
 	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan)
-	time.Sleep(1 * time.Millisecond)
+
+	var elev driver.Elevator
+	elev = <-mainElevatorChan // hang program untill driver is initialized
 
 	// Combine network and driver
 	txChan := make(chan interface{})
 	networkOrderChan := make(chan order.Order)
 	go network.Network(20028, txChan, networkOrderChan)
 
-	var elev driver.Elevator
 	if *readFile {
 		elev = readElevatorFromFile() // TODO: implement this function
 	}
