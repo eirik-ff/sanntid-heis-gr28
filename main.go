@@ -256,72 +256,12 @@ func main() {
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
-			// log.Printf("New elevator: %#v f:%#v d:%#v s:%#v\n",
-			// 	elev.ActiveOrder, elev.Floor, elev.Direction, elev.State)
-			// log.Println(driver.OrderMatrixToString(elev))
-
-			/**********************************************
-						OLD CODE
-
-						log.Println(newElev.ToString())
-						log.Println(newElev.OrderMatrixToString())
-
-						if elev.ActiveOrder.Status != newElev.ActiveOrder.Status &&
-							newElev.ActiveOrder.Status == order.Finished {
-
-							log.Printf("Sending finished order on network: %s\n",
-								newElev.ActiveOrder.ToString())
-							txChan <- newElev.ActiveOrder
-						}
-						elev = newElev
-			            **********************************************/
-
-			/////////
-			// FSM //
-			/////////
 			state, elev = updatedElevatorState(newElev, elev, state, txChan)
 
-			// o := findNextOrder(elev)
-			// fmt.Printf("Next order: %s\n", o.ToString())
-			// if o.Status != order.Invalid {
-			// 	log.Printf("Sending order to execute: %s\n", o.ToString())
-			// 	orderChan <- o
-			// }
 		case ord := <-buttonPressChan:
-
-			/**********************************************
-				OLD CODE
-
-				// if cab order, no need to broadcast
-				if ord.Type != order.Cab {
-					// status is set to NotTaken in buttonPress in driver
-					txChan <- ord // this also sends to myself
-				}
-
-				// TODO: might not be necessary since my own packets are received
-				// 		 and matrix is updated in buttonPress in driver for cab calls
-				// orderChan <- ord
-
-			    **********************************************/
-
-			/////////////
-			// FSM 	   //
-			/////////////
 			newButtonPress(ord, txChan)
 
 		case ord := <-networkOrderChan:
-
-			// orderChan <- ord
-
-			// if message has status not taken, add that to the matrix
-			// if message has status finished, add that to matrix and handle
-			// the same must happen either way
-
-			//TODO: write to file?
-
-			/////////////
-			// FSM 	   //
-			/////////////
 			elev = newNetworkMessage(ord, elev)
 
 		case <-wdTimer.C:
@@ -333,12 +273,8 @@ func main() {
 			return
 
 		case <-time.After(200 * time.Millisecond):
-			// My computer spun up a lot if this is runs every time there is no
-			// other event.
-
 			// send next order if not currently active order
 			o := findNextOrder(elev)
-			// fmt.Println(o.ToString())
 			if o.Status != order.Invalid {
 				fmt.Printf("Order to exec: %s\n", o.ToString())
 
