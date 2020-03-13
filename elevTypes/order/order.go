@@ -75,3 +75,8 @@ func (o *Order) ToString() string {
 
 	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s'}", o.Floor, typeStr, statusStr)
 }
+
+// CompareEq checks if o1 == o2 but doesn't check LocalTimeStamp
+func CompareEq(o1, o2 Order) bool {
+	return o1.Floor == o2.Floor && o1.Type == o2.Type && o1.Status == o2.Status
+}

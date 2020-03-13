@@ -129,6 +129,7 @@ func main() {
 		elev = readElevatorFromFile() // TODO: implement this function
 	}
 	var lastOrder order.Order
+	_ = lastOrder
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
@@ -138,10 +139,18 @@ func main() {
 			if elev.ActiveOrder.Status != newElev.ActiveOrder.Status &&
 				newElev.ActiveOrder.Status == order.Finished {
 
+				log.Printf("Sending finished order on network: %s\n",
+					newElev.ActiveOrder.ToString())
 				txChan <- newElev.ActiveOrder
 			}
 			elev = newElev
 
+			// o := findNextOrder(elev)
+			// fmt.Printf("Next order: %s\n", o.ToString())
+			// if o.Status != order.Invalid {
+			// 	log.Printf("Sending order to execute: %s\n", o.ToString())
+			// 	orderChan <- o
+			// }
 		case ord := <-buttonPressChan:
 			// if cab order, no need to broadcast
 			if ord.Type != order.Cab {
@@ -171,52 +180,55 @@ func main() {
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())
 			return
 
-		case <-time.After(50 * time.Millisecond):
+		case <-time.After(200 * time.Millisecond):
 			// My computer spun up a lot if this is runs every time there is no
 			// other event.
 
 			// send next order if not currently active order
 			o := findNextOrder(elev)
-			if o.Status != order.Invalid && o != lastOrder {
+			if o.Status != order.Invalid {
 				fmt.Printf("Order to exec: %s\n", o.ToString())
 				lastOrder = o
 				orderChan <- o
+
+				o.Status = order.Taken
+				txChan <- o
 			}
 		}
 	}
 }
 
-func orderBelow(elev elevator.Elevator) (int, int) {
+func orderBelow(elev elevator.Elevator) (int, int, bool) {
 	for f := elev.Floor - 1; f >= 0; f-- {
 		for i := range elev.Orders[f] {
 			if elev.Orders[f][i].Status == order.NotTaken {
-				return f, i
+				return f, i, true
 			}
 		}
 	}
 
-	return -1, -1
+	return -1, -1, false
 }
 
-func orderAbove(elev elevator.Elevator) (int, int) {
+func orderAbove(elev elevator.Elevator) (int, int, bool) {
 	for f := elev.Floor + 1; f < 4; f++ {
 		for i := range elev.Orders[f] {
 			if elev.Orders[f][i].Status == order.NotTaken {
-				return f, i
+				return f, i, true
 			}
 		}
 	}
 
-	return -1, -1
+	return -1, -1, false
 }
 
-func orderAtFloor(elev elevator.Elevator) (int, int) {
+func orderAtFloor(elev elevator.Elevator) (int, int, bool) {
 	for i := range elev.Orders[elev.Floor] {
 		if elev.Orders[elev.Floor][i].Status == order.NotTaken {
-			return elev.Floor, i
+			return elev.Floor, i, true
 		}
 	}
-	return -1, -1
+	return -1, -1, false
 }
 
 func findNextOrder(elev elevator.Elevator) order.Order {
@@ -224,17 +236,16 @@ func findNextOrder(elev elevator.Elevator) order.Order {
 
 	// this is currently a simple, dumb implementation that simply looks if
 	// there are orders above, go up. if below, go down.
-	f, t := -1, -1
-	if elev.Direction == elevator.Down {
-		f, t = orderBelow(elev)
-	} else if elev.Direction == elevator.Up {
-		f, t = orderAbove(elev)
-	} else {
-		f, t = orderAtFloor(elev)
+	f, t, ok := orderAtFloor(elev)
+	if !ok {
+		f, t, ok = orderAbove(elev)
+	}
+	if !ok {
+		f, t, ok = orderBelow(elev)
 	}
 
 	o := order.Order{Floor: f, Type: order.Type(t), Status: order.Execute}
-	if f < 0 || t < 0 {
+	if !ok {
 		// no orders exist
 		o.Status = order.Invalid
 	}
