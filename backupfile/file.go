@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"../elevTypes/order"
+	"../driver"
 )
 
 var (
@@ -14,11 +14,11 @@ var (
 	err     error
 )
 
-func writeToFile(matrix order.Elevator) {
+func writeToFile(matrix driver.Elevator) {
 
-	os.Remove("currentMatrix.txt")
+	os.Remove("elevBackupFile.txt")
 
-	file, _ := os.OpenFile("currentMatrix.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, _ := os.OpenFile("elevBackupFile.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 	defer file.Close()
 
@@ -32,18 +32,19 @@ func writeToFile(matrix order.Elevator) {
 
 }
 
-func readFromFile() order.Elevator {
+//This has been moved to main.go
+func readFromFile() driver.Elevator {
 
 	file, _ := os.Open("currentMatrix.txt")
 
 	data, _ := ioutil.ReadAll(file)
 
-	var matrix order.Elevator
+	var elev driver.Elevator
 
-	json.Unmarshal([]byte(data), &matrix)
+	json.Unmarshal([]byte(data), &elev)
 
 	file.Close()
 
-	return matrix
+	return elev
 
 }

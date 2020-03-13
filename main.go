@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -28,7 +30,18 @@ var (
 
 func readElevatorFromFile() driver.Elevator {
 	// TODO: implement this function
-	return driver.Elevator{}
+	file, _ := os.Open("elevBackupFile.txt")
+
+	data, _ := ioutil.ReadAll(file)
+
+	var elev driver.Elevator
+
+	json.Unmarshal([]byte(data), &elev)
+
+	file.Close()
+
+	return elev
+	//return driver.Elevator{}
 }
 
 func setupLog() (*os.File, error) {
@@ -146,6 +159,8 @@ func main() {
 			// if message has status not taken, add that to the matrix
 			// if message has status finished, add that to matrix and handle
 			// the same must happen either way
+
+			//TODO: write to file?
 
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
