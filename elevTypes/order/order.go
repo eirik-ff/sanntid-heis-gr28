@@ -1,12 +1,14 @@
 package order
 
+import "fmt"
+
 // Type is a typedef of int
 type Type int
 
 const (
 	HallUp   Type = 0
-	HallDown      = 1
-	Cab           = 2
+	HallDown Type = 1
+	Cab      Type = 2
 )
 
 // Status is typedef of int
@@ -19,9 +21,6 @@ const (
 	// Invalid exists because the default value of int is zero,
 	// but the status field must be set to the desired status manually.
 	Invalid Status = 0
-	// InitialBroadcast status is for when an order comes locally and is
-	// broadcast to the other elevators.
-	InitialBroadcast Status = 1
 	// NotTaken status is set if an order is received, but no one has
 	// broadcasted that they are taking this order
 	NotTaken Status = 2
@@ -39,6 +38,40 @@ const (
 // Order is a struct with necessary information to execute an order.
 type Order struct {
 	Floor  int
-	Type   int
+	Type   Type
 	Status Status
+
+	// LocalTimeStamp is used to check if an order that is marked as taken is
+	// not forgotten about.
+	LocalTimeStamp int64
+}
+
+func (o *Order) ToString() string {
+	typeStr := ""
+	switch o.Type {
+	case 0:
+		typeStr = "HallUp"
+	case 1:
+		typeStr = "HallDown"
+	case 2:
+		typeStr = "Cab"
+	}
+
+	statusStr := ""
+	switch o.Status {
+	case Abort:
+		statusStr = "Abort"
+	case Invalid:
+		statusStr = "Invalid"
+	case NotTaken:
+		statusStr = "NotTaken"
+	case Taken:
+		statusStr = "Taken"
+	case Execute:
+		statusStr = "Execute"
+	case Finished:
+		statusStr = "Finished"
+	}
+
+	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s'}", o.Floor, typeStr, statusStr)
 }
