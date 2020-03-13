@@ -40,6 +40,10 @@ type Order struct {
 	Floor  int
 	Type   Type
 	Status Status
+
+	// LocalTimeStamp is used to check if an order that is marked as taken is
+	// not forgotten about.
+	LocalTimeStamp int64
 }
 
 func (o *Order) ToString() string {
