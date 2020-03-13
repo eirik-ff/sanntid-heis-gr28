@@ -73,5 +73,5 @@ func (o *Order) ToString() string {
 		statusStr = "Finished"
 	}
 
-	return fmt.Sprintf("Order: floor:%d type:'%s' status:'%s'", o.Floor, typeStr, statusStr)
+	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s'}", o.Floor, typeStr, statusStr)
 }

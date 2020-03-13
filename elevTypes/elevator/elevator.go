@@ -79,7 +79,7 @@ func (elev *Elevator) ToString() string {
 		stateStr = "Error"
 	}
 
-	return fmt.Sprintf("Elevator: %s floor:%d dir:'%s' state:'%s'",
+	return fmt.Sprintf("Elevator:{%s floor:%d dir:'%s' state:'%s'}",
 		elev.ActiveOrder.ToString(), elev.Floor, dirStr, stateStr)
 }
 
