@@ -54,6 +54,35 @@ func NewElevator(nfloors, nbuttons int) Elevator {
 	return elev
 }
 
+func (elev *Elevator) ToString() string {
+	dirStr := fmt.Sprintf("Invalid (%d)", elev.Direction)
+	switch elev.Direction {
+	case Up:
+		dirStr = "Up"
+	case Down:
+		dirStr = "Down"
+	case Stop:
+		dirStr = "Stop"
+	}
+
+	stateStr := ""
+	switch elev.State {
+	case Init:
+		stateStr = "Init"
+	case Idle:
+		stateStr = "Idle"
+	case Moving:
+		stateStr = "Moving"
+	case DoorOpen:
+		stateStr = "DoorOpen"
+	case Error:
+		stateStr = "Error"
+	}
+
+	return fmt.Sprintf("Elevator: %s floor:%d dir:'%s' state:'%s'",
+		elev.ActiveOrder.ToString(), elev.Floor, dirStr, stateStr)
+}
+
 func (elev *Elevator) OrderMatrixToString() string {
 	s := ""
 	for f := 0; f < elev.Nfloors; f++ {
