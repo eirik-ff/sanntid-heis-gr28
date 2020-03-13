@@ -13,6 +13,8 @@ import (
 const (
 	floorChangeTimeout time.Duration = 5 * time.Second // TODO: Measure suitable value for floorChangeTimeout
 	doorTimeout        time.Duration = 3 * time.Second
+
+	orderTimeout int64 = 30 // seconds
 )
 
 var ( // TODO: look at making these local in Driver
@@ -41,24 +43,38 @@ func setLamps(elev elevator.Elevator) {
 func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, bool) {
 	log.Printf("New order from main: %s\n", ord.ToString())
 
-	updateElev := true
-	if ord.Status == order.Execute {
+	switch ord.Status {
+	case order.Abort:
+
+	case order.Invalid:
+
+	case order.NotTaken:
+		// this is when you get a message from the network
+		elev.AssignOrderToMatrix(ord)
+	case order.Taken:
+		// this is when you get a message from the network saying that another
+		// elevator is taking this specific order
+		if !elev.SameOrderInMatrix(ord) {
+			elev.AssignOrderToMatrix(ord)
+			elev.Orders[ord.Floor][ord.Type].LocalTimeStamp = time.Now().Unix() + orderTimeout
+		}
+	case order.Execute:
+		// this is when main tells you that this is the order you should execute
+		// now
 		log.Printf("Order with status Execute at floor %d type %d\n", ord.Floor,
 			ord.Type)
+
+		elev.AssignOrderToMatrix(ord)
 		elev.ActiveOrder = ord
 		if elev.State == elevator.Idle {
 			elev.State = elevator.Moving
 		}
-		updateElev = true
-	} else if ord.Status == order.Finished {
-		updateElev = true
+	case order.Finished:
+		// this is when you get an order from the network telling you that the
+		// received order is finished and you should not care about it anymore
+		elev.AssignOrderToMatrix(ord)
 	}
-	// else just keep status
-
-	if updateElev {
-		elev.Orders[ord.Floor][ord.Type] = ord
-	}
-	return elev, updateElev
+	return elev, true
 }
 
 func arrivedAtTarget(elev elevator.Elevator) (elevator.Elevator, bool) {

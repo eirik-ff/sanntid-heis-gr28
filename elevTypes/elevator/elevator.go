@@ -93,3 +93,22 @@ func (elev *Elevator) OrderMatrixToString() string {
 	}
 	return s
 }
+
+// SameOrderInMatrix checks if the same order with
+func (elev *Elevator) SameOrderInMatrix(o order.Order) bool {
+	for f := range elev.Orders {
+		for t := range elev.Orders[f] {
+			curr := elev.Orders[f][t]
+			if order.CompareEq(curr, o) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// AssignOrderToMatrix modifies the order matrix to set the argument order `ord`
+// to that orders floor and type in the matrix.
+func (elev *Elevator) AssignOrderToMatrix(ord order.Order) {
+	elev.Orders[ord.Floor][ord.Type] = ord
+}
