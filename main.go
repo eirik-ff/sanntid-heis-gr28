@@ -148,7 +148,6 @@ func main() {
 			// if cab order, no need to broadcast
 			if ord.Type != order.Cab {
 				// status is set to NotTaken in buttonPress in driver
-				// ord.Status = order.InitialBroadcast
 				txChan <- ord // this also sends to myself
 			}
 

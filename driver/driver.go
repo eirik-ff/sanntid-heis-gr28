@@ -42,10 +42,6 @@ func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, 
 	log.Printf("New order from main: %s\n", ord.ToString())
 
 	updateElev := true
-	// if ord.Status == order.InitialBroadcast {
-	// 	ord.Status = order.NotTaken
-	// 	updateElev = true
-	// } else
 	if ord.Status == order.Execute {
 		log.Printf("Order with status Execute at floor %d type %d\n", ord.Floor,
 			ord.Type)

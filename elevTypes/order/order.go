@@ -21,9 +21,6 @@ const (
 	// Invalid exists because the default value of int is zero,
 	// but the status field must be set to the desired status manually.
 	Invalid Status = 0
-	// InitialBroadcast status is for when an order comes locally and is
-	// broadcast to the other elevators.
-	InitialBroadcast Status = 1
 	// NotTaken status is set if an order is received, but no one has
 	// broadcasted that they are taking this order
 	NotTaken Status = 2
@@ -62,8 +59,6 @@ func (o *Order) ToString() string {
 		statusStr = "Abort"
 	case Invalid:
 		statusStr = "Invalid"
-	case InitialBroadcast:
-		statusStr = "InitialBroadcast"
 	case NotTaken:
 		statusStr = "NotTaken"
 	case Taken:
