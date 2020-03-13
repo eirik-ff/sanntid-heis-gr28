@@ -29,6 +29,17 @@ var (
 	Nbuttons int
 )
 
+
+//States for MAIN
+type State int
+const (
+	Init     State = 0
+	Normal   State = 1
+	Error    State = 2
+)
+
+
+
 func readElevatorFromFile() elevator.Elevator {
 	// TODO: implement this function
 	file, _ := os.Open("elevBackupFile.txt")
@@ -85,7 +96,123 @@ func logPID() {
 	log.Printf("PID: %d\n", pid)
 }
 
+
+//Function for handling 'updated elevator event'
+//
+//*****Why did we call this function*************
+// | Causes for event                           |
+// |--------------------------------------------|
+// | Order matrix changed                       |
+// | Floor changed                              |
+// | DIrection changed                          |
+// | State changed  (this includes error state) |
+//
+//*****What should be done*************
+// | Condition      | Need to do                                                                                                            |
+// |----------------+-----------------------------------------------------------------------------------------------------------------------|
+// | ActiveOrder.Status = Finished | Broadcast the active order on the network. (The driver should have removed the order from the matrix.) |
+// | State = Error                 | Send active order with status notTaken on the network and go to error state                            |
+//
+//
+// | Parameters        | Description                |
+// |-------------------+----------------------------|
+// | e driver.Elevator | The updated elevator state |
+// | s State           | The main state             |
+//
+// | Returns             | Description               |
+// |---------------------+---------------------------|
+// | State               | The updated state of Main |
+// | elevator.Elevator   | New elevator              |
+func updatedElevatorState(e elevator.Elevator, oldE elevator.Elevator, s State) State, elevator.Elevator {
+
+	log.Println(newElev.ToString())
+	log.Println(newElev.OrderMatrixToString())
+	
+	//Currently both if statements broadcasts the active order on the txChan
+	//I kept it this way, if we need to do additional stuff before broadcasting in error state.
+	//If we do not need to change anything in the case of error. The txChan <- e.ActiveOrder should be moved out of the ifs.
+	var state State
+
+	if oldE.ActiveOrder.Status != e.ActiveOrder.Status &&
+		e.ActiveOrder.Status == order.Finished {
+		//If active order is finished - Broadcast order to network
+		txChan <- e.ActiveOrder
+		state = s
+		
+	} else if e.State == Error {
+		//If elevator is in error state - send active order
+		//(is the order set to notTaken in the driver? - if not, need to set it here)
+		//e.ActiveOrder = order.NotTaken
+		txChan <- e.ActiveOrder
+		state = Error
+	}
+	return state, e
+}
+
+//Function for handling 'new button press'
+//
+//*****Why did we call this function*************
+// | Causes for event |
+// |------------------|
+// | New button press |
+
+// *****What should be done*************
+// | Need to do                                |
+// |-------------------------------------------|
+// | Broadcast new order on the network        |
+//
+// | Parameters      | Description        |
+// |-----------------+--------------------|
+// | ord order.Order | The new order      |
+func newButtonPress(ord order.Order) {
+	
+	//Broadcast new order
+	txChan <- ord	
+}
+
+
+//Function for handling 'new button press'
+//
+// *****Why did we call this function*************
+// | Causes for event          |
+// |---------------------------|
+// | New order                 |
+// | Someone started an order  |
+// | Someone finished an order |
+//
+// *****What should be done*************
+// | Condition                    | Need to do                                |
+// |------------------------------+-------------------------------------------|
+// | New order                    | Update the matrix with the received order |
+// | Someone stated an order      | Update the matrix with the received order |
+// | Someone finished a new order | Remove the order from the matrix          |
+//
+// | Parameters             | Description        |
+// |------------------------+--------------------|
+// | ord order.Order        | The received order |
+// | e driver.Elevator      | The elevator state |
+//
+// | Return          | Description                |
+// |-----------------+----------------------------|
+// | driver.Elevator | The updated elevator state |
+func newNetworkMessage(ord order.Order, e driver.Elevator) driver.Elevator {
+	
+	log.Printf("Received order from network: %#v\n", ord)
+	
+	//If finished - remove
+	if ord.Status == order.Finished {
+		//remove from matrix
+	} else {
+		//update matrix with new order
+	}
+	
+	return driver.Elevator	
+}
+
 func main() {
+
+	state := Init //Set the state of main to Init
+	
 	logFile, err := setupLog()
 	if err != nil {
 		fmt.Println("Error setting up log")
@@ -129,10 +256,18 @@ func main() {
 		elev = readElevatorFromFile() // TODO: implement this function
 	}
 	var lastOrder order.Order
-	_ = lastOrder
+
+	state = Normal //Set the state of main to Normal
 	for {
 		select {
-		case newElev := <-mainElevatorChan:
+		case newElev = <-mainElevatorChan:
+			// log.Printf("New elevator: %#v f:%#v d:%#v s:%#v\n",
+			// 	elev.ActiveOrder, elev.Floor, elev.Direction, elev.State)
+			// log.Println(driver.OrderMatrixToString(elev))
+
+			/**********************************************
+			OLD CODE
+
 			log.Println(newElev.ToString())
 			log.Println(newElev.OrderMatrixToString())
 
@@ -144,6 +279,13 @@ func main() {
 				txChan <- newElev.ActiveOrder
 			}
 			elev = newElev
+            **********************************************/
+
+
+			/////////
+			// FSM //
+			/////////
+			state, elev = updatedElevatorState(newElev, elev, state)			
 
 			// o := findNextOrder(elev)
 			// fmt.Printf("Next order: %s\n", o.ToString())
@@ -152,6 +294,11 @@ func main() {
 			// 	orderChan <- o
 			// }
 		case ord := <-buttonPressChan:
+
+
+			/**********************************************
+			OLD CODE
+			
 			// if cab order, no need to broadcast
 			if ord.Type != order.Cab {
 				// status is set to NotTaken in buttonPress in driver
@@ -162,9 +309,16 @@ func main() {
 			// 		 and matrix is updated in buttonPress in driver for cab calls
 			// orderChan <- ord
 
+		    **********************************************/
+
+			/////////////
+			// FSM 	   //
+			/////////////
+			newButtonPress(ord)
+
 		case ord := <-networkOrderChan:
-			log.Printf("Received order from network: %s\n", ord.ToString())
-			orderChan <- ord
+
+			// orderChan <- ord
 
 			// if message has status not taken, add that to the matrix
 			// if message has status finished, add that to matrix and handle
@@ -172,6 +326,11 @@ func main() {
 
 			//TODO: write to file?
 
+			/////////////
+			// FSM 	   //
+			/////////////
+			elev = newNetworkMessage(ord, elev)
+			
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
 			wdTimer.Reset(wdTimerInterval)
@@ -193,6 +352,41 @@ func main() {
 
 				o.Status = order.Taken
 				txChan <- o
+			}
+
+		case <-time.After(100 * time.Millisecond):
+			//////////////////
+			// Evaluate FSM //
+			//////////////////
+			
+			switch state {
+			case Init:
+				//Init mode
+				//Do nothing?
+
+				//Init is done before entering the for/select main loop
+			case Normal:
+				//Normal mode
+				//Do nothing?
+			case Error:
+				//Error mode
+
+				//Do something to check if you should still be in error mode
+				//F.ex. Move the motor to check if a new floor change is detected.
+
+
+				//////////////////
+				// PSUDOCODE    //
+				//////////////////				
+				// if stillError() {
+				// 	state = error
+				// }
+				// else {
+				// 	state = normal or init
+				// }
+				
+			default: // unknown state
+				
 			}
 		}
 	}
