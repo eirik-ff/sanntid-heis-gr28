@@ -45,35 +45,43 @@ func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, 
 
 	switch ord.Status {
 	case order.Abort:
+		// shouldn't happen
 
 	case order.Invalid:
+		// shouldn't happen
 
-	case order.NotTaken:
-		// this is when you get a message from the network
-		elev.AssignOrderToMatrix(ord)
-	case order.Taken:
-		// this is when you get a message from the network saying that another
-		// elevator is taking this specific order
-		if !elev.SameOrderInMatrix(ord) {
-			elev.AssignOrderToMatrix(ord)
-			elev.Orders[ord.Floor][ord.Type].LocalTimeStamp = time.Now().Unix() + orderTimeout
-		}
-	case order.Execute:
-		// this is when main tells you that this is the order you should execute
-		// now
-		log.Printf("Order with status Execute at floor %d type %d\n", ord.Floor,
-			ord.Type)
-
-		elev.AssignOrderToMatrix(ord)
-		elev.ActiveOrder = ord
-		if elev.State == elevator.Idle {
-			elev.State = elevator.Moving
-		}
 	case order.Finished:
 		// this is when you get an order from the network telling you that the
 		// received order is finished and you should not care about it anymore
 		elev.AssignOrderToMatrix(ord)
+
+	case order.NotTaken:
+		// this is when you get a message from the network
+		elev.AssignOrderToMatrix(ord)
+
+	case order.Taken:
+		// this is when you get a message from the network saying that another
+		// elevator is taking this specific order
+		if elev.Orders[ord.Floor][ord.Type].Status != order.Taken {
+			ord.LocalTimeStamp = time.Now().Unix() + orderTimeout
+			elev.AssignOrderToMatrix(ord)
+		}
+
+	case order.Execute:
+		// this is when main tells you that this is the order you should execute
+		// now
+		if elev.ActiveOrder.Status != order.Finished && !order.CompareEq(ord, elev.ActiveOrder) {
+			// new order, set old to NotTaken
+			elev.ActiveOrder.Status = order.NotTaken
+			elev.AssignOrderToMatrix(elev.ActiveOrder)
+
+			log.Printf("Reset old active order: %s\n", elev.ActiveOrder.ToString())
+		}
+		// Set new active order
+		ord.Status = order.Taken
+		elev.ActiveOrder = ord
 	}
+
 	return elev, true
 }
 
@@ -237,9 +245,7 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 		// Act according to new state
 		switch elev.State {
 		case elevator.Idle:
-			if !(elev.ActiveOrder.Status == order.Finished ||
-				elev.ActiveOrder.Status == order.Abort ||
-				elev.ActiveOrder.Status == order.Invalid) {
+			if elev.ActiveOrder.Status == order.Taken {
 				// will come into effect at next iteration
 				elev.State = elevator.Moving
 				updateElev = true
