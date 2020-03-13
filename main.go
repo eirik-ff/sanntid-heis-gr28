@@ -132,9 +132,7 @@ func main() {
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
-			log.Printf("New elevator: %s f:%#v d:%#v s:%#v\n",
-				newElev.ActiveOrder.ToString(), newElev.Floor,
-				newElev.Direction, newElev.State)
+			log.Println(newElev.ToString())
 			log.Println(newElev.OrderMatrixToString())
 
 			if elev.ActiveOrder.Status != newElev.ActiveOrder.Status &&
