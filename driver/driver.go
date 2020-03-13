@@ -80,6 +80,7 @@ func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, 
 		// Set new active order
 		ord.Status = order.Taken
 		elev.ActiveOrder = ord
+		elev.AssignOrderToMatrix(ord)
 	}
 
 	return elev, true
