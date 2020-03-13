@@ -1,12 +1,14 @@
 package order
 
+import "fmt"
+
 // Type is a typedef of int
 type Type int
 
 const (
 	HallUp   Type = 0
-	HallDown      = 1
-	Cab           = 2
+	HallDown Type = 1
+	Cab      Type = 2
 )
 
 // Status is typedef of int
@@ -39,6 +41,38 @@ const (
 // Order is a struct with necessary information to execute an order.
 type Order struct {
 	Floor  int
-	Type   int
+	Type   Type
 	Status Status
+}
+
+func (o *Order) ToString() string {
+	typeStr := ""
+	switch o.Type {
+	case 0:
+		typeStr = "HallUp"
+	case 1:
+		typeStr = "HallDown"
+	case 2:
+		typeStr = "Cab"
+	}
+
+	statusStr := ""
+	switch o.Status {
+	case Abort:
+		statusStr = "Abort"
+	case Invalid:
+		statusStr = "Invalid"
+	case InitialBroadcast:
+		statusStr = "InitialBroadcast"
+	case NotTaken:
+		statusStr = "NotTaken"
+	case Taken:
+		statusStr = "Taken"
+	case Execute:
+		statusStr = "Execute"
+	case Finished:
+		statusStr = "Finished"
+	}
+
+	return fmt.Sprintf("Order: floor:%d type:'%s' status:'%s'", o.Floor, typeStr, statusStr)
 }

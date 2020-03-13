@@ -5,18 +5,9 @@ import (
 	"log"
 	"time"
 
+	"../elevTypes/elevator"
 	"../elevTypes/order"
 	"./elevio"
-)
-
-// MotorDirection is a typedef of elevio.MotorDirection to be able
-// to use it in packages that include driver.
-type MotorDirection elevio.MotorDirection
-
-const (
-	MD_Up   = MotorDirection(elevio.MD_Up)
-	MD_Down = MotorDirection(elevio.MD_Down)
-	MD_Stop = MotorDirection(elevio.MD_Stop)
 )
 
 const (
@@ -32,28 +23,7 @@ var ( // TODO: look at making these local in Driver
 	Nbuttons int
 )
 
-type State int
-
-const (
-	Init     State = 0
-	Idle     State = 1
-	Moving   State = 2
-	DoorOpen State = 3
-	Error    State = 4
-)
-
-type Elevator struct {
-	ActiveOrder order.Order
-	Floor       int
-	Direction   MotorDirection
-	State       State
-	Orders      [][]order.Order
-	// TODO: bounds check on index when accessing? if two elevators have
-	// 		 different number of floors this will be necessary.
-	// 		 maybe need bound check to be fault tolerant?
-}
-
-func setLamps(elev Elevator) {
+func setLamps(elev elevator.Elevator) {
 	for i := range elev.Orders {
 		for j := range elev.Orders[i] {
 			set := false
@@ -68,21 +38,24 @@ func setLamps(elev Elevator) {
 	}
 }
 
-func orderFromMain(elev Elevator, ord order.Order) (Elevator, bool) {
-	log.Printf("New order from main: %#v\n", ord)
+func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, bool) {
+	log.Printf("New order from main: %s\n", ord.ToString())
 
-	updateElev := false
-	if ord.Status == order.InitialBroadcast {
-		ord.Status = order.NotTaken
-		updateElev = true
-	} else if ord.Status == order.Execute {
+	updateElev := true
+	// if ord.Status == order.InitialBroadcast {
+	// 	ord.Status = order.NotTaken
+	// 	updateElev = true
+	// } else
+	if ord.Status == order.Execute {
+		log.Printf("Order with status Execute at floor %d type %d\n", ord.Floor,
+			ord.Type)
 		elev.ActiveOrder = ord
-		if elev.State == Idle {
-			elev.State = Moving
+		if elev.State == elevator.Idle {
+			elev.State = elevator.Moving
 		}
 		updateElev = true
 	} else if ord.Status == order.Finished {
-		updateElev = false
+		updateElev = true
 	}
 	// else just keep status
 
@@ -92,26 +65,26 @@ func orderFromMain(elev Elevator, ord order.Order) (Elevator, bool) {
 	return elev, updateElev
 }
 
-func arrivedAtTarget(elev Elevator) (Elevator, bool) {
+func arrivedAtTarget(elev elevator.Elevator) (elevator.Elevator, bool) {
 	log.Println("Arrived at target floor")
 
 	elevio.SetMotorDirection(elevio.MD_Stop)
 	motorTimer.Stop() // TODO: look into motor timer
-	elev.Direction = MD_Stop
+	elev.Direction = elevator.Stop
 
 	elev.ActiveOrder.Status = order.Finished
 	elev.Orders[elev.ActiveOrder.Floor][elev.ActiveOrder.Type].Status = order.Finished
 
 	elevio.SetDoorOpenLamp(true)
 	doorTimer.Reset(doorTimeout) // TODO: look into door timer
-	elev.State = DoorOpen
+	elev.State = elevator.DoorOpen
 	log.Println("Door opening")
 
 	return elev, true
 }
 
-// can only happen in state Moving
-func floorChange(elev Elevator, newFloor int) (Elevator, bool) {
+// can only happen in state elevator.Moving
+func floorChange(elev elevator.Elevator, newFloor int) (elevator.Elevator, bool) {
 	elevio.SetFloorIndicator(newFloor)
 	motorTimer.Reset(floorChangeTimeout) // TODO: look into motor timer
 
@@ -121,43 +94,43 @@ func floorChange(elev Elevator, newFloor int) (Elevator, bool) {
 	if newFloor == elev.ActiveOrder.Floor {
 		elev, _ = arrivedAtTarget(elev)
 	} else {
-		elev.State = Moving
+		elev.State = elevator.Moving
 	}
 	return elev, true
 }
 
-func buttonPress(elev Elevator, press elevio.ButtonEvent) (Elevator, bool, order.Order) {
+func buttonPress(elev elevator.Elevator, press elevio.ButtonEvent) (elevator.Elevator, bool, order.Order) {
 	f := press.Floor
-	t := int(press.Button)
+	t := order.Type(press.Button)
 	o := order.Order{Floor: f, Type: t, Status: order.NotTaken}
 	elev.Orders[f][t] = o
 
-	log.Printf("Button press: %#v\n", o)
+	log.Printf("Button press: %s\n", o.ToString())
 
 	return elev, true, o
 }
 
-// can only happen in state DoorOpen
-func doorClose(elev Elevator) (Elevator, bool) {
+// can only happen in state elevator.DoorOpen
+func doorClose(elev elevator.Elevator) (elevator.Elevator, bool) {
 	doorTimer.Stop() // TODO: look into door timer
 	elevio.SetDoorOpenLamp(false)
-	elev.State = Idle
+	elev.State = elevator.Idle
 
 	log.Println("Door closing")
 
 	return elev, true
 }
 
-func motorTimeout(elev Elevator) (Elevator, bool) {
+func motorTimeout(elev elevator.Elevator) (elevator.Elevator, bool) {
 	log.Println("Motor timed out!!")
 
 	elevio.SetMotorDirection(elevio.MD_Stop)
-	elev.State = Error
+	elev.State = elevator.Error
 
 	return elev, true
 }
 
-func setDirection(elev Elevator) (Elevator, bool) {
+func setDirection(elev elevator.Elevator) (elevator.Elevator, bool) {
 	var updateElev bool = false
 	var d elevio.MotorDirection
 	if elev.ActiveOrder.Floor > elev.Floor {
@@ -168,10 +141,10 @@ func setDirection(elev Elevator) (Elevator, bool) {
 		elev, updateElev = arrivedAtTarget(elev)
 	}
 
-	if elev.Direction != MotorDirection(d) {
+	if elev.Direction != elevator.Direction(d) {
 		elevio.SetMotorDirection(d)
 
-		elev.Direction = MotorDirection(d)
+		elev.Direction = elevator.Direction(d)
 		updateElev = true
 	}
 
@@ -197,25 +170,20 @@ func driverInit(port int, drvButtons chan elevio.ButtonEvent, drvFloors chan int
 // Driver is the main function of the package. It reads the low level channels
 // and sends the information to a higher level.
 // TODO: re-write this
-func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- Elevator,
+func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.Elevator,
 	orderChan <-chan order.Order, buttonPressChan chan<- order.Order) {
 
 	Nfloors = nfloors
 	Nbuttons = nbuttons
 
-	var elev Elevator
-	elev.State = Init
-	elev.Orders = make([][]order.Order, Nfloors)
-	for i := range elev.Orders {
-		elev.Orders[i] = make([]order.Order, Nbuttons)
-	}
-
 	drvButtons := make(chan elevio.ButtonEvent)
 	drvFloors := make(chan int)
 	driverInit(port, drvButtons, drvFloors)
 
-	elev.State = Idle
+	var elev elevator.Elevator
+	elev = elevator.NewElevator(nfloors, nbuttons)
 	mainElevatorChan <- elev // to not make it crash on default in main
+
 	var updateElev bool = false
 	for {
 		// Capture events
@@ -248,44 +216,33 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- Elevator,
 
 		// Send new elevator object to main
 		if updateElev {
+			setLamps(elev)
+
 			mainElevatorChan <- elev
 			updateElev = false
-
-			setLamps(elev) // TODO: is this a fitting place to update lights?
 		}
 
 		// Act according to new state
 		switch elev.State {
-		case Idle:
+		case elevator.Idle:
 			if !(elev.ActiveOrder.Status == order.Finished ||
 				elev.ActiveOrder.Status == order.Abort ||
 				elev.ActiveOrder.Status == order.Invalid) {
 				// will come into effect at next iteration
-				elev.State = Moving
+				elev.State = elevator.Moving
 				updateElev = true
 			}
 
-		case Moving:
+		case elevator.Moving:
 			elev, updateElev = setDirection(elev)
 
-		case DoorOpen:
+		case elevator.DoorOpen:
 			// do nothing, everything happens in transition/on events
-		case Error:
+		case elevator.Error:
 			fallthrough
 		default: // unknown state
 			// TODO: something that happend should not have happened, send
 			// 		 error to main
 		}
 	}
-}
-
-func OrderMatrixToString(elev Elevator) string {
-	s := ""
-	for f := 0; f < Nfloors; f++ {
-		for i := range elev.Orders[f] {
-			s += fmt.Sprintf("%d", elev.Orders[f][i].Status)
-		}
-		s += " "
-	}
-	return s
 }

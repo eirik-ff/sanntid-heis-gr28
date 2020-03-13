@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"./driver"
+	"./elevTypes/elevator"
 	"./elevTypes/order"
 	"./network"
 	"./network/bcast"
@@ -28,20 +29,20 @@ var (
 	Nbuttons int
 )
 
-func readElevatorFromFile() driver.Elevator {
+func readElevatorFromFile() elevator.Elevator {
 	// TODO: implement this function
 	file, _ := os.Open("elevBackupFile.txt")
 
 	data, _ := ioutil.ReadAll(file)
 
-	var elev driver.Elevator
+	var elev elevator.Elevator
 
 	json.Unmarshal([]byte(data), &elev)
 
 	file.Close()
 
 	return elev
-	//return driver.Elevator{}
+	//return elevator.Elevator{}
 }
 
 func setupLog() (*os.File, error) {
@@ -105,19 +106,18 @@ func main() {
 	// Init driver
 	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
 	nfloors := flag.Int("floors", 4, "Number of floors per elevator")
-	nbuttons := flag.Int("buttons", 3, "Number of button types per elevator (e.g. all up, hall down, cab call)")
 	readFile := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
 	flag.Parse()
 
 	Nfloors = *nfloors
-	Nbuttons = *nbuttons
+	Nbuttons = 3 // must be constant
 
-	mainElevatorChan := make(chan driver.Elevator, 100)
+	mainElevatorChan := make(chan elevator.Elevator, 100)
 	orderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
 	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan)
 
-	var elev driver.Elevator
+	var elev elevator.Elevator
 	elev = <-mainElevatorChan // hang program untill driver is initialized
 
 	// Combine network and driver
@@ -131,20 +131,24 @@ func main() {
 	var lastOrder order.Order
 	for {
 		select {
-		case elev = <-mainElevatorChan:
-			log.Printf("New elevator: %#v f:%#v d:%#v s:%#v\n",
-				elev.ActiveOrder, elev.Floor, elev.Direction, elev.State)
-			log.Println(driver.OrderMatrixToString(elev))
+		case newElev := <-mainElevatorChan:
+			log.Printf("New elevator: %s f:%#v d:%#v s:%#v\n",
+				newElev.ActiveOrder.ToString(), newElev.Floor,
+				newElev.Direction, newElev.State)
+			log.Println(newElev.OrderMatrixToString())
 
-			if elev.ActiveOrder.Status == order.Finished {
-				txChan <- elev.ActiveOrder
+			if elev.ActiveOrder.Status != newElev.ActiveOrder.Status &&
+				newElev.ActiveOrder.Status == order.Finished {
+
+				txChan <- newElev.ActiveOrder
 			}
+			elev = newElev
 
 		case ord := <-buttonPressChan:
 			// if cab order, no need to broadcast
 			if ord.Type != order.Cab {
 				// status is set to NotTaken in buttonPress in driver
-				ord.Status = order.InitialBroadcast
+				// ord.Status = order.InitialBroadcast
 				txChan <- ord // this also sends to myself
 			}
 
@@ -153,8 +157,8 @@ func main() {
 			// orderChan <- ord
 
 		case ord := <-networkOrderChan:
-			log.Printf("Received order from network: %#v\n", ord)
-			// orderChan <- ord
+			log.Printf("Received order from network: %s\n", ord.ToString())
+			orderChan <- ord
 
 			// if message has status not taken, add that to the matrix
 			// if message has status finished, add that to matrix and handle
@@ -177,7 +181,7 @@ func main() {
 			// send next order if not currently active order
 			o := findNextOrder(elev)
 			if o.Status != order.Invalid && o != lastOrder {
-				fmt.Printf("Order to exec: %#v\n", o)
+				fmt.Printf("Order to exec: %s\n", o.ToString())
 				lastOrder = o
 				orderChan <- o
 			}
@@ -185,7 +189,7 @@ func main() {
 	}
 }
 
-func orderBelow(elev driver.Elevator) (int, int) {
+func orderBelow(elev elevator.Elevator) (int, int) {
 	for f := elev.Floor - 1; f >= 0; f-- {
 		for i := range elev.Orders[f] {
 			if elev.Orders[f][i].Status == order.NotTaken {
@@ -197,7 +201,7 @@ func orderBelow(elev driver.Elevator) (int, int) {
 	return -1, -1
 }
 
-func orderAbove(elev driver.Elevator) (int, int) {
+func orderAbove(elev elevator.Elevator) (int, int) {
 	for f := elev.Floor + 1; f < 4; f++ {
 		for i := range elev.Orders[f] {
 			if elev.Orders[f][i].Status == order.NotTaken {
@@ -209,7 +213,7 @@ func orderAbove(elev driver.Elevator) (int, int) {
 	return -1, -1
 }
 
-func orderAtFloor(elev driver.Elevator) (int, int) {
+func orderAtFloor(elev elevator.Elevator) (int, int) {
 	for i := range elev.Orders[elev.Floor] {
 		if elev.Orders[elev.Floor][i].Status == order.NotTaken {
 			return elev.Floor, i
@@ -218,21 +222,21 @@ func orderAtFloor(elev driver.Elevator) (int, int) {
 	return -1, -1
 }
 
-func findNextOrder(elev driver.Elevator) order.Order {
+func findNextOrder(elev elevator.Elevator) order.Order {
 	// TODO: re-write this to use one of the algorithms on github
 
 	// this is currently a simple, dumb implementation that simply looks if
 	// there are orders above, go up. if below, go down.
 	f, t := -1, -1
-	if elev.Direction == driver.MD_Down {
+	if elev.Direction == elevator.Down {
 		f, t = orderBelow(elev)
-	} else if elev.Direction == driver.MD_Up {
+	} else if elev.Direction == elevator.Up {
 		f, t = orderAbove(elev)
 	} else {
 		f, t = orderAtFloor(elev)
 	}
 
-	o := order.Order{Floor: f, Type: t, Status: order.Execute}
+	o := order.Order{Floor: f, Type: order.Type(t), Status: order.Execute}
 	if f < 0 || t < 0 {
 		// no orders exist
 		o.Status = order.Invalid
