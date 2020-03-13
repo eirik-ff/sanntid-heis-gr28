@@ -256,6 +256,20 @@ func main() {
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
+			if elev.ActiveOrder.Status == order.Finished || elev.Floor != newElev.Floor {
+				o := findNextOrder(elev)
+				if o.Status != order.Invalid {
+					fmt.Printf("Order to exec: %s\n", o.ToString())
+
+					orderChan <- o
+					if !order.CompareEq(o, elev.ActiveOrder) {
+						o.Status = order.NotTaken
+						txChan <- o
+						log.Println("Next order different from active, send NotTaken")
+					}
+				}
+			}
+
 			state, elev = updatedElevatorState(newElev, elev, state, txChan)
 
 		case ord := <-buttonPressChan:
@@ -274,17 +288,17 @@ func main() {
 
 		case <-time.After(200 * time.Millisecond):
 			// send next order if not currently active order
-			o := findNextOrder(elev)
-			if o.Status != order.Invalid {
-				fmt.Printf("Order to exec: %s\n", o.ToString())
+			// o := findNextOrder(elev)
+			// if o.Status != order.Invalid {
+			// 	fmt.Printf("Order to exec: %s\n", o.ToString())
 
-				orderChan <- o
-				if !order.CompareEq(o, elev.ActiveOrder) {
-					o.Status = order.NotTaken
-					txChan <- o
-					log.Println("Next order different from active, send NotTaken")
-				}
-			}
+			// 	orderChan <- o
+			// 	if !order.CompareEq(o, elev.ActiveOrder) {
+			// 		o.Status = order.NotTaken
+			// 		txChan <- o
+			// 		log.Println("Next order different from active, send NotTaken")
+			// 	}
+			// }
 
 		case <-time.After(1000 * time.Millisecond):
 			//////////////////
