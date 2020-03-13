@@ -20,7 +20,8 @@ import (
 )
 
 const (
-	wdTimerInterval time.Duration = 500 * time.Millisecond
+	wdTimerInterval  time.Duration = 500 * time.Millisecond
+	maxExecutionTime time.Duration = 30 * time.Second // Max time the elevator is premitted to try to execute an order
 )
 
 var (
@@ -42,6 +43,22 @@ func readElevatorFromFile() driver.Elevator {
 
 	return elev
 	//return driver.Elevator{}
+}
+
+func writeElevatorToFile(elev driver.Elevator) {
+	os.Remove("elevBackupFile.txt")
+
+	file, _ := os.OpenFile("elevBackupFile.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+	defer file.Close()
+
+	msg, _ := json.Marshal(elev)
+
+	if _, err := file.Write([]byte(msg)); err != nil {
+		log.Fatal(err)
+	}
+
+	file.Close()
 }
 
 func setupLog() (*os.File, error) {
@@ -161,6 +178,7 @@ func main() {
 			// the same must happen either way
 
 			//TODO: write to file?
+			writeElevatorToFile(elev)
 
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"

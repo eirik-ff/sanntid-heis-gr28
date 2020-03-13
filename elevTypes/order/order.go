@@ -1,5 +1,7 @@
 package order
 
+import "time"
+
 // Type is a typedef of int
 type Type int
 
@@ -38,7 +40,8 @@ const (
 
 // Order is a struct with necessary information to execute an order.
 type Order struct {
-	Floor  int
-	Type   int
-	Status Status
+	Floor     int
+	Type      int
+	Status    Status
+	Timestamp time.Time // Time at status = Taken
 }
