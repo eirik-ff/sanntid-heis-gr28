@@ -191,7 +191,7 @@ func newButtonPress(ord order.Order, txChan chan interface{}) {
 // |-------------------+----------------------------|
 // | elevator.Elevator | The updated elevator state |
 func newNetworkMessage(ord order.Order, elev elevator.Elevator) elevator.Elevator {
-	// log.Printf("Received order from network: %s\n", ord.ToString())
+	log.Printf("Received order from network: %s\n", ord.ToString())
 
 	//If finished - remove
 	if ord.Status == order.Finished {
@@ -277,6 +277,7 @@ func main() {
 
 		case ord := <-networkOrderChan:
 			elev = newNetworkMessage(ord, elev)
+			orderChan <- ord
 
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
