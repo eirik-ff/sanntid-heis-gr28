@@ -255,7 +255,6 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 
 		case elevator.Moving:
 			elev, updateElev = setDirection(elev)
-			log.Println("elev update from moving")
 
 		case elevator.DoorOpen:
 			// do nothing, everything happens in transition/on events
