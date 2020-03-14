@@ -163,6 +163,7 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 func newButtonPress(ord order.Order, txChan chan interface{}) {
 	if ord.Type != order.Cab {
 		// txChan <- ord
+		log.Printf("Sending order on network: %s\n", ord.ToString())
 	}
 }
 
@@ -262,9 +263,10 @@ func main() {
 					fmt.Printf("Order to exec: %s\n", o.ToString())
 
 					orderChan <- o
-					if !order.CompareEq(o, elev.ActiveOrder) {
+					if o.Type != order.Cab && !order.CompareEq(o, elev.ActiveOrder) {
 						o.Status = order.NotTaken
 						txChan <- o
+						log.Printf("Sending order on network: %s\n", o.ToString())
 						log.Println("Next order different from active, send NotTaken")
 					}
 				}
