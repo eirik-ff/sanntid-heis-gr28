@@ -18,6 +18,7 @@ heis
 
 # Log files
 logs/
+*.log
 
 # VScode settings directory
 .vscode/
