@@ -264,6 +264,8 @@ func main() {
 
 					orderChan <- o
 					if o.Type != order.Cab && !order.CompareEq(o, elev.ActiveOrder) {
+						// tell the other elevators that the last active order
+						// is no longer active and someone else can take it
 						o.Status = order.NotTaken
 						txChan <- o
 						log.Printf("Sending order on network: %s\n", o.ToString())
