@@ -250,10 +250,12 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 				// will come into effect at next iteration
 				elev.State = elevator.Moving
 				updateElev = true
+				log.Println("elev update from idle")
 			}
 
 		case elevator.Moving:
 			elev, updateElev = setDirection(elev)
+			log.Println("elev update from moving")
 
 		case elevator.DoorOpen:
 			// do nothing, everything happens in transition/on events
