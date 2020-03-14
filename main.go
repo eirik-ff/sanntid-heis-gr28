@@ -132,13 +132,13 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 	if elev.ActiveOrder.Status != newElev.ActiveOrder.Status &&
 		newElev.ActiveOrder.Status == order.Finished {
 		//If active order is finished - Broadcast order to network
-		txChan <- newElev.ActiveOrder
+		// txChan <- newElev.ActiveOrder
 
 	} else if newElev.State == elevator.Error {
 		//If elevator is in error state - send active order
 		//(is the order set to notTaken in the driver? - if not, need to set it here)
 		//newElev.ActiveOrder = order.NotTaken
-		txChan <- newElev.ActiveOrder
+		// txChan <- newElev.ActiveOrder
 		state = Error
 	}
 
@@ -162,7 +162,7 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 // | ord order.Order | The new order      |
 func newButtonPress(ord order.Order, txChan chan interface{}) {
 	if ord.Type != order.Cab {
-		txChan <- ord
+		// txChan <- ord
 	}
 }
 
@@ -191,7 +191,7 @@ func newButtonPress(ord order.Order, txChan chan interface{}) {
 // |-------------------+----------------------------|
 // | elevator.Elevator | The updated elevator state |
 func newNetworkMessage(ord order.Order, elev elevator.Elevator) elevator.Elevator {
-	log.Printf("Received order from network: %s\n", ord.ToString())
+	// log.Printf("Received order from network: %s\n", ord.ToString())
 
 	//If finished - remove
 	if ord.Status == order.Finished {
