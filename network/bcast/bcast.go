@@ -8,16 +8,17 @@ import (
 	"os"
 	"os/user"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
 	"../conn"
 )
 
-//Unique ID appended to every message to differentiate out messages from other groups
-const UniqueId string = "4242"
+// UniqueID appended to every message to differentiate out messages from other groups
+const UniqueID string = "4242"
 
-//Times to resend a network package
+// Times to resend a network package
 const timesToResendMessage = 10
 
 const networkLogFile = "network.log"
@@ -25,7 +26,7 @@ const networkLogFile = "network.log"
 var logFile *os.File
 var logger *log.Logger
 
-//function for finding the first null termination in a byte array
+// function for finding the first null termination in a byte array
 func clen(n []byte) int {
 	for i := 0; i < len(n); i++ {
 		if n[i] == 0 {
@@ -35,7 +36,7 @@ func clen(n []byte) int {
 	return len(n)
 }
 
-//Function for initalizeing the
+// InitLogger initalizes the network log file
 func InitLogger() {
 	fmt.Printf("Entering init logger %v\n", logger)
 	if logger == nil {
@@ -63,9 +64,9 @@ func InitLogger() {
 	}
 }
 
+// check if same timestamp is the same as the last received message for this type of message
+// if current timestamp is equal to last time stamp, don't decode message
 func isDuplicate(timestamp string, timestampMap *map[reflect.Type]string, msg string, Type reflect.Type) bool {
-	//check if same timestamp is the same as the last received message for this type of message
-	//if current timestamp is equal to last time stamp, don't decode message
 	if v, ok := (*timestampMap)[Type]; ok {
 		if v != timestamp {
 
@@ -84,54 +85,55 @@ func isDuplicate(timestamp string, timestampMap *map[reflect.Type]string, msg st
 	return false
 }
 
-//Network receive routine which can receive JSONs and output them on the correct channel
-//based on the type it received
+// Receiver routine which can receive JSONs over the network and output them on
+// the correct channel based on the type it received.
 //
 // Received message format:
-// | UniqueId | TimeStamp | Struct type | Message |
+// | UniqueID | TimeStamp | PID | Struct type | Message |
 //
+// Note: the PID is of the sending process. It's used to filter out messages so
+// 	     they are not sent to the sending process.
 func Receiver(port int, outputChans ...interface{}) {
-	//the end position of the timestamp in the received message
+	// the end position of the timestamp in the received message
 	const timestampLength = 20
+	const pidLength = 6
+	pid := os.Getpid()
 
-	//open connection
+	// open connection
 	conn := conn.DialBroadcastUDP(port)
 
-	//create map for storing timestamp of the different types of received messages
+	// create map for storing timestamp of the different types of received messages
 	timestampMap := make(map[reflect.Type]string)
 
 	for {
-		var buf [1024]byte //receive buffer
+		var buf [1024]byte // receive buffer
 
-		conn.ReadFrom(buf[0:])           //read from network
-		for _, ch := range outputChans { //check outputChans against the prefix to check which type of message was received
-
-			//Type of channel
-			Type := reflect.TypeOf(ch).Elem()
+		conn.ReadFrom(buf[0:])           // read from network
+		for _, ch := range outputChans { // check outputChans against the prefix to check which type of message was received
+			Type := reflect.TypeOf(ch).Elem() // Type of channel
 			typeName := Type.String()
 
-			//prefix to search for
-			prefix := UniqueId + typeName
+			prefix := UniqueID + typeName                                               // prefix to search for
+			nanoTimeStamp := string(buf[len(UniqueID) : timestampLength+len(UniqueID)]) // extract timestamp
+			pidStr := string(buf[timestampLength+len(UniqueID) : timestampLength+len(UniqueID)+pidLength])
+			recvPid, err := strconv.Atoi(pidStr)
+			if err != nil {
+				logger.Printf("Received pid string '%s' couldn't be converted\n", pidStr)
+			} else if recvPid == pid {
+				break // do not receive your own messages
+			}
 
-			//extract timestamp
-			nanoTimeStamp := string(buf[len(UniqueId) : timestampLength+len(UniqueId)])
-
-			//remove the timestamp from the message
-			msg := fmt.Sprintf("%s\n", string(buf[:len(UniqueId)])+string(buf[len(UniqueId)+timestampLength:]))
-
-			//terminate the string correctly
-			terminatedMsg := msg[:clen([]byte(msg))]
+			// remove the timestamp and pid from the message
+			msg := string(buf[:len(UniqueID)]) + string(buf[len(UniqueID)+timestampLength+pidLength:])
+			terminatedMsg := msg[:clen([]byte(msg))] // remove trailing zero bytes
 
 			if strings.HasPrefix(terminatedMsg[:clen([]byte(msg))], prefix) {
-
-				//if message is duplicate, don't decode the message
 				if isDuplicate(nanoTimeStamp, &timestampMap, terminatedMsg, Type) {
-					break
+					break // if message is duplicate, don't decode the message
 				}
 
+				// convert from json to correct struct type
 				v := reflect.New(Type)
-
-				//convert from json to correct struct type
 				json.Unmarshal([]byte(terminatedMsg[len(prefix):clen([]byte(msg))]), v.Interface())
 
 				reflect.Select([]reflect.SelectCase{{
@@ -144,45 +146,49 @@ func Receiver(port int, outputChans ...interface{}) {
 	}
 }
 
-//Takes in a struct and adds a uniqueID and the type of the struct as a prefix.
-//Used before transmitting a message over the network
-func convertToJsonMsg(msg interface{}) (encodedMsg string) {
+// Takes in a struct and adds a uniqueID and the type of the struct as a prefix.
+// Used before transmitting a message over the network
+func convertToJSONMsg(msg interface{}) string {
 
 	// logger.Println("CONVERT: ", msg)
 	json, err := json.Marshal(msg)
 
 	if err != nil {
-		logger.Println("Network TX - convertToJsonMsg:", err)
+		logger.Println("Network TX - convertToJSONMsg:", err)
 	}
 
-	nanoTime := fmt.Sprintf("%020d", time.Now().UTC().UnixNano())
+	return reflect.TypeOf(msg).String() + string(json)
+}
 
-	prefixedMsg := UniqueId + nanoTime + reflect.TypeOf(msg).String() + string(json) //add uniqueId and type prefix to json
+func prefixMsg(msg string) string {
+	nanoTime := fmt.Sprintf("%020d", time.Now().UTC().UnixNano())
+	pid := fmt.Sprintf("%06d", os.Getpid())
+
+	prefixedMsg := UniqueID + nanoTime + pid + msg
 	return prefixedMsg
 }
 
-//Routine used to transmit message sent into txChan as a struct
-//Adds unique ID and typePrefix
+// Transmitter routine used to transmit message sent into txChan as a struct
+// Adds unique ID and typePrefix.
 func Transmitter(port int, txChan <-chan interface{}) {
 
 	conn := conn.DialBroadcastUDP(port)
 	addr, _ := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", port))
 
 	for {
-		//wait for msg
+		// wait for msg
 		select {
 		case msg := <-txChan:
 
-			//convert received struct to json with prefix
-			jsonMsg := convertToJsonMsg(msg)
+			// convert received struct to json with prefix
+			jsonMsg := convertToJSONMsg(msg)
+			jsonMsg = prefixMsg(jsonMsg)
 
 			for i := 0; i < timesToResendMessage; i++ {
-				//transmit msg
+				// transmit msg
 				conn.WriteTo([]byte(jsonMsg), addr)
 				// time.Sleep(1 * time.Millisecond)
 			}
 		}
 	}
 }
-
-//  LocalWords:  JSON
