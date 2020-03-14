@@ -286,20 +286,6 @@ func main() {
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())
 			return
 
-		case <-time.After(200 * time.Millisecond):
-			// send next order if not currently active order
-			// o := findNextOrder(elev)
-			// if o.Status != order.Invalid {
-			// 	fmt.Printf("Order to exec: %s\n", o.ToString())
-
-			// 	orderChan <- o
-			// 	if !order.CompareEq(o, elev.ActiveOrder) {
-			// 		o.Status = order.NotTaken
-			// 		txChan <- o
-			// 		log.Println("Next order different from active, send NotTaken")
-			// 	}
-			// }
-
 		case <-time.After(1000 * time.Millisecond):
 			//////////////////
 			// Evaluate FSM //
