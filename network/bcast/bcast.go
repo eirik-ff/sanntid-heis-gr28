@@ -54,7 +54,7 @@ func InitLogger() {
 			fmt.Printf("Error creating log directory at %s\n", logDirPath)
 			return
 		}
-		logFile, err = os.OpenFile(logFilePath, os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_SYNC, 0655)
+		logFile, err = os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_SYNC, 0655)
 		if err != nil {
 			fmt.Printf("Error opening info log file at %s\n", logFilePath)
 			return
