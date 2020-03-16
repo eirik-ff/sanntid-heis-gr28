@@ -162,7 +162,7 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 // | ord order.Order | The new order      |
 func newButtonPress(ord order.Order, txChan chan interface{}) {
 	if ord.Type != order.Cab {
-		// txChan <- ord
+		txChan <- ord //transmit new button order
 		log.Printf("Sending order on network: %s\n", ord.ToString())
 	}
 }
@@ -257,23 +257,44 @@ func main() {
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
+
+			//Evaluate if a another order should be taken
 			if elev.ActiveOrder.Status == order.Finished || elev.Floor != newElev.Floor {
 				o := findNextOrder(elev)
 				if o.Status != order.Invalid {
 					fmt.Printf("Order to exec: %s\n", o.ToString())
 
 					orderChan <- o
+
 					if o.Type != order.Cab && !order.CompareEq(o, elev.ActiveOrder) {
 						// tell the other elevators that the last active order
 						// is no longer active and someone else can take it
 						o.Status = order.NotTaken
-						txChan <- o
+						
+						txChan <- o //this is probably the problem when elevators are mirroring
 						log.Printf("Sending order on network: %s\n", o.ToString())
 						log.Println("Next order different from active, send NotTaken")
 					}
 				}
 			}
 
+
+			///////////////////////////////
+			// SEND ORDERS ON NETWORK	 //
+			///////////////////////////////
+			
+			
+			//Filter what to send over the network
+			if newElev.ActiveOrder.Status == order.Finished ||
+				newElev.ActiveOrder.Status == order.Taken ||
+				newElev.ActiveOrder.Status == order.NotTaken {
+				
+				//Only transmit if active order changed, and not cab order
+				if newElev.ActiveOrder.Type != order.Cab && !order.CompareEq(elev.ActiveOrder, newElev.ActiveOrder){
+					txChan <- newElev.ActiveOrder //Transmit active order
+				}
+			}
+			
 			state, elev = updatedElevatorState(newElev, elev, state, txChan)
 
 		case ord := <-buttonPressChan:
