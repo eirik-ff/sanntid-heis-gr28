@@ -36,8 +36,8 @@ func clen(n []byte) int {
 	return len(n)
 }
 
-// InitLogger initalizes the network log file
-func InitLogger() {
+//Function for initalizeing the
+func InitLogger(port int) {
 	fmt.Printf("Entering init logger %v\n", logger)
 	if logger == nil {
 		fmt.Println("Initializing logger")
@@ -47,7 +47,7 @@ func InitLogger() {
 			return
 		}
 		logDirPath := usr.HomeDir + "/sanntid-heis-gr28/logs/"
-		logFilePath := logDirPath + networkLogFile
+		logFilePath := logDirPath + fmt.Sprintf("port_%d_", port) + networkLogFile
 
 		err = os.MkdirAll(logDirPath, 0755)
 		if err != nil {
@@ -74,12 +74,12 @@ func isDuplicate(timestamp string, timestampMap *map[reflect.Type]string, msg st
 			logger.Println("Received message: " + msg)
 		} else {
 
-			logger.Println("Dumped message due to duplicate: " + msg)
+			// logger.Println("Dumped message due to duplicate: " + msg)
 			return true
 		}
 
 	} else {
-		logger.Println("First message of type: " + msg)
+		logger.Println("Received message: " + msg)
 		(*timestampMap)[Type] = timestamp
 	}
 	return false
