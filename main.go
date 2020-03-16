@@ -259,7 +259,8 @@ func main() {
 		case newElev := <-mainElevatorChan:
 
 			//Evaluate if a another order should be taken
-			if elev.ActiveOrder.Status == order.Finished || elev.Floor != newElev.Floor {
+			if newElev.ActiveOrder.Status == order.Finished ||
+				elev.Floor != newElev.Floor {
 				o := findNextOrder(elev)
 				if o.Status != order.Invalid {
 					fmt.Printf("Order to exec: %s\n", o.ToString())
