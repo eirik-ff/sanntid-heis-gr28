@@ -245,7 +245,7 @@ func main() {
 	// Combine network and driver
 	txChan := make(chan interface{})
 	networkOrderChan := make(chan order.Order)
-	go network.Network(20028, txChan, networkOrderChan)
+	go network.Network(20028, *port, txChan, networkOrderChan)
 
 	if *readFile {
 		elev = readElevatorFromFile() // TODO: implement this function
