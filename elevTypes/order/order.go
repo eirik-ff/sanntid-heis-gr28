@@ -3,8 +3,13 @@ package order
 
 import (
 	"fmt"
-	"time"
+)
 
+
+
+const (
+	OrderTimeout int64 = 10 // seconds
+)
 
 // Type is a typedef of int
 type Type int
@@ -78,7 +83,7 @@ func (o *Order) ToString() string {
 		statusStr = "Finished"
 	}
 
-	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s'}", o.Floor, typeStr, statusStr)
+	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s' timeout:'%d'}", o.Floor, typeStr, statusStr, o.LocalTimeStamp)
 }
 
 // CompareEq checks if o1 == o2 but doesn't check LocalTimeStamp

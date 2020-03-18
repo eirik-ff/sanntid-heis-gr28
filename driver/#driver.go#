@@ -201,7 +201,7 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 
 	var elev elevator.Elevator
 	elev = initState
-	setLamps(elev)
+	//	setLamps(elev)
 	
 
 	mainElevatorChan <- elev // to not make it crash on default in main

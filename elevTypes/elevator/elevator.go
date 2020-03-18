@@ -2,7 +2,7 @@ package elevator
 
 import (
 	"fmt"
-
+	"time"
 	"../order"
 )
 
@@ -38,6 +38,29 @@ type Elevator struct {
 	// TODO: bounds check on index when accessing? if two elevators have
 	// 		 different number of floors this will be necessary.
 	// 		 maybe need bound check to be fault tolerant?
+}
+
+
+func (elev *Elevator) CheckOrderTimestamp(timeoutChan chan <- order.Order) {
+
+	fmt.Println(elev.OrderMatrixToString())
+	
+	//Loop through all orders in matrix
+    for f := 0; f < len(elev.Orders); f++ {
+        for t := range elev.Orders[f] {
+
+			currentTime := time.Now().Unix() //get current time
+
+			//check if order is taken
+			if elev.Orders[f][t].Status == order.Taken {
+				//Check if order is timed out
+				if  currentTime  >= elev.Orders[f][t].LocalTimeStamp {
+					fmt.Printf("Order %s timed out. Current time :'%d' \n", elev.Orders[f][t].ToString(), currentTime) 
+					timeoutChan <- elev.Orders[f][t] //send the timeout order to main
+				}
+			}
+        }
+    }
 }
 
 func NewElevator(nfloors, nbuttons int) Elevator {

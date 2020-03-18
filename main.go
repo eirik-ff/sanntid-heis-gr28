@@ -22,15 +22,13 @@ import (
 
 const (
 	wdTimerInterval time.Duration = 500 * time.Millisecond
-	orderWaitInterval time.Duration = 1000 * time.Millisecond //Interval in which the elevator can receive 'Taken', and not update the active order
-	maxExecutionTime time.Duration = 30 * time.Second // Max time the elevator is premitted to try to execute an order
+	orderWaitInterval time.Duration = 100 * time.Millisecond //Interval in which the elevator can receive 'Taken', and not update the active order
 )
 
 
 var (
 
 	orderTimer  *time.Timer //Timer used in updatedElevatorState
-	
 	Nfloors  int
 	Nbuttons int
 )
@@ -45,7 +43,6 @@ const (
 )
 
 func readElevatorFromFile() elevator.Elevator {
-	// TODO: implement this function
 	file, _ := os.Open("elevBackupFile.txt")
 
 	data, _ := ioutil.ReadAll(file)
@@ -60,7 +57,7 @@ func readElevatorFromFile() elevator.Elevator {
 	//return elevator.Elevator{}
 }
 
-func writeElevatorToFile(elev driver.Elevator) {
+func writeElevatorToFile(elev elevator.Elevator) {
 	os.Remove("elevBackupFile.txt")
 
 	file, _ := os.OpenFile("elevBackupFile.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -298,15 +295,24 @@ func main() {
 	readFile := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
 	flag.Parse()
 
+
 	Nfloors = *nfloors
 	Nbuttons = 3 // must be constant
 
 	mainElevatorChan := make(chan elevator.Elevator, 100)
 	orderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
-	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan)
+	
+	var elev elevator.Elevator = elevator.NewElevator(Nfloors, Nbuttons)
+	
+	if *readFile {
+		elev = readElevatorFromFile() //Read orders from file
+		orderChan <- elev.ActiveOrder
+	}
 
-	var elev elevator.Elevator
+	
+
+	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan, elev)
 	elev = <-mainElevatorChan // hang program untill driver is initialized
 
 	// Combine network and driver
@@ -314,9 +320,7 @@ func main() {
 	networkOrderChan := make(chan order.Order)
 	go network.Network(20028, *port, txChan, networkOrderChan)
 
-	if *readFile {
-		elev = readElevatorFromFile() // TODO: implement this function
-	}
+
 	var lastOrder order.Order
 	_ = lastOrder
 
@@ -325,6 +329,9 @@ func main() {
 	var nextOrder order.Order
 	orderTimer = time.NewTimer(orderWaitInterval)
 	orderTimer.Stop()
+
+	
+	
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
@@ -366,8 +373,7 @@ func main() {
 			// if message has status finished, add that to matrix and handle
 			// the same must happen either way
 
-			//TODO: write to file?
-			writeElevatorToFile(elev)
+
 
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
@@ -377,12 +383,12 @@ func main() {
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())
 			return
 
-		case <-time.After(1000 * time.Millisecond):
+		case <-time.After(100 * time.Millisecond):
 			
 			//////////////////
 			// Evaluate FSM //
 			//////////////////
-			log.Println("Evaluate FSM")
+			// log.Println("Evaluate FSM")
 
 			switch state {
 			case Init:
@@ -393,6 +399,20 @@ func main() {
 			case Normal:
 				//Normal mode
 				//Do nothing?
+				timeoutChan := make(chan order.Order, elev.Nfloors * elev.Nbuttons)
+
+				//Check if any taken orders are timed out
+				elev.CheckOrderTimestamp(timeoutChan);
+
+				
+				for len(timeoutChan) > 0 {
+					o := <- timeoutChan //get timedout order
+					o.Status = order.NotTaken 
+					orderChan <- o //send order to driver
+				}
+				
+				
+				writeElevatorToFile(elev) //write orders to file
 			case Error:
 				//Error mode
 
