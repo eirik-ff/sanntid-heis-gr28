@@ -22,9 +22,14 @@ import (
 
 const (
 	wdTimerInterval time.Duration = 500 * time.Millisecond
+	orderWaitInterval time.Duration = 1000 * time.Millisecond //Interval in which the elevator can receive 'Taken', and not update the active order
 )
 
+
 var (
+
+	orderTimer  *time.Timer //Timer used in updatedElevatorState
+	
 	Nfloors  int
 	Nbuttons int
 )
@@ -120,7 +125,7 @@ func logPID() {
 // |---------------------+---------------------------|
 // | State               | The updated state of Main |
 // | elevator.Elevator   | New elevator              |
-func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s State, txChan chan<- interface{}) (State, elevator.Elevator) {
+func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s State, txChan chan<- interface{}) (State, elevator.Elevator, order.Order) {
 	log.Println(newElev.ToString())
 	log.Println(newElev.OrderMatrixToString())
 
@@ -128,21 +133,66 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 	//I kept it this way, if we need to do additional stuff before broadcasting in error state.
 	//If we do not need to change anything in the case of error. The txChan <- newElev.ActiveOrder should be moved out of the ifs.
 	var state State = s
+	var nextOrder order.Order
 
-	if elev.ActiveOrder.Status != newElev.ActiveOrder.Status &&
-		newElev.ActiveOrder.Status == order.Finished {
-		//If active order is finished - Broadcast order to network
-		// txChan <- newElev.ActiveOrder
+	//Evaluate if a another order should be taken
+	if newElev.ActiveOrder.Status == order.Finished ||
+		elev.Floor != newElev.Floor {
+		nextOrder = findNextOrder(newElev)
+		
+		//Start goroutine 
+		go func () {
+			
+			if nextOrder.Status != order.Invalid {
+				fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
+				
+				orderTimer.Reset(orderWaitInterval) //Start timer
+				
 
-	} else if newElev.State == elevator.Error {
+				
+				//		orderChan <- o
+
+				// if o.Type != order.Cab && !order.CompareEq(o, elev.ActiveOrder) {
+				// 	// tell the other elevators that the last active order
+				// 	// is no longer active and someone else can take it
+				// 	o.Status = order.NotTaken
+					
+				// 	txChan <- o //Send new active order 
+				// 	log.Printf("Sending order on network: %s\n", o.ToString())
+				// 	log.Println("Next order different from active, send NotTaken")
+				// }
+			}
+		}()
+	}
+
+	///////////////////////////////
+	// SEND ORDERS ON NETWORK	 //
+	///////////////////////////////
+	
+	//Filter what to send over the network
+	if newElev.ActiveOrder.Status == order.Finished ||
+		newElev.ActiveOrder.Status == order.Taken ||
+		newElev.ActiveOrder.Status == order.NotTaken {
+		
+		//Only transmit if active order changed, and not cab order
+		if newElev.ActiveOrder.Type != order.Cab && !order.CompareEq(elev.ActiveOrder, newElev.ActiveOrder){
+			txChan <- newElev.ActiveOrder //Send active order
+		}
+	}
+	
+
+	if newElev.State == elevator.Error {
 		//If elevator is in error state - send active order
 		//(is the order set to notTaken in the driver? - if not, need to set it here)
 		//newElev.ActiveOrder = order.NotTaken
 		// txChan <- newElev.ActiveOrder
-		state = Error
+
+
+		
+		state = Error //Go to error state
 	}
 
-	return state, newElev
+	return state, newElev, nextOrder
 }
 
 //Function for handling 'new button press'
@@ -254,50 +304,36 @@ func main() {
 	_ = lastOrder
 
 	state = Normal //Set the state of main to Normal
+
+	var nextOrder order.Order
+	orderTimer = time.NewTimer(orderWaitInterval)
+	orderTimer.Stop()
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
 
-			//Evaluate if a another order should be taken
-			if newElev.ActiveOrder.Status == order.Finished ||
-				elev.Floor != newElev.Floor {
-				o := findNextOrder(newElev)
-				if o.Status != order.Invalid {
-					fmt.Printf("Order to exec: %s\n", o.ToString())
+			state, elev, nextOrder = updatedElevatorState(newElev, elev, state, txChan)
 
-					orderChan <- o
+		case <- orderTimer.C: //Order timer started in updatedElevatorState timed out
 
-					if o.Type != order.Cab && !order.CompareEq(o, elev.ActiveOrder) {
-						// tell the other elevators that the last active order
-						// is no longer active and someone else can take it
-						o.Status = order.NotTaken
-						
-						txChan <- o //this is probably the problem when elevators are mirroring
-						log.Printf("Sending order on network: %s\n", o.ToString())
-						log.Println("Next order different from active, send NotTaken")
-					}
-				}
-			}					
-
-
-			///////////////////////////////
-			// SEND ORDERS ON NETWORK	 //
-			///////////////////////////////
 			
-			
-			//Filter what to send over the network
-			if newElev.ActiveOrder.Status == order.Finished ||
-				newElev.ActiveOrder.Status == order.Taken ||
-				newElev.ActiveOrder.Status == order.NotTaken {
+			//Check if next order to execute is already taken
+			if nextOrder.Status != order.Invalid && elev.Orders[nextOrder.Floor][nextOrder.Type].Status == order.NotTaken {
 				
-				//Only transmit if active order changed, and not cab order
-				if newElev.ActiveOrder.Type != order.Cab && !order.CompareEq(elev.ActiveOrder, newElev.ActiveOrder){
-					txChan <- newElev.ActiveOrder //Transmit active order
+				orderChan <- nextOrder
+
+				if nextOrder.Type != order.Cab && !order.CompareEq(nextOrder, elev.ActiveOrder) && elev.ActiveOrder.Status != order.Finished {
+					// tell the other elevators that the last active order
+					// is no longer active and someone else can take it
+					o := elev.ActiveOrder
+					o.Status = order.NotTaken
+					
+					txChan <- o //Send new active order 
+					log.Printf("Sending order on network: %s\n", o.ToString())
+					log.Println("Next order different from active, send NotTaken")
 				}
 			}
 			
-			state, elev = updatedElevatorState(newElev, elev, state, txChan)
-
 		case ord := <-buttonPressChan:
 			newButtonPress(ord, txChan)
 
@@ -314,6 +350,7 @@ func main() {
 			return
 
 		case <-time.After(1000 * time.Millisecond):
+			
 			//////////////////
 			// Evaluate FSM //
 			//////////////////
