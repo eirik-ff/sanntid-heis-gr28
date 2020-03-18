@@ -1,6 +1,10 @@
 package order
 
-import "fmt"
+
+import (
+	"fmt"
+	"time"
+
 
 // Type is a typedef of int
 type Type int
@@ -37,6 +41,7 @@ const (
 
 // Order is a struct with necessary information to execute an order.
 type Order struct {
+
 	Floor  int
 	Type   Type
 	Status Status

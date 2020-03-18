@@ -23,6 +23,7 @@ import (
 const (
 	wdTimerInterval time.Duration = 500 * time.Millisecond
 	orderWaitInterval time.Duration = 1000 * time.Millisecond //Interval in which the elevator can receive 'Taken', and not update the active order
+	maxExecutionTime time.Duration = 30 * time.Second // Max time the elevator is premitted to try to execute an order
 )
 
 
@@ -57,6 +58,22 @@ func readElevatorFromFile() elevator.Elevator {
 
 	return elev
 	//return elevator.Elevator{}
+}
+
+func writeElevatorToFile(elev driver.Elevator) {
+	os.Remove("elevBackupFile.txt")
+
+	file, _ := os.OpenFile("elevBackupFile.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+	defer file.Close()
+
+	msg, _ := json.Marshal(elev)
+
+	if _, err := file.Write([]byte(msg)); err != nil {
+		log.Fatal(err)
+	}
+
+	file.Close()
 }
 
 func setupLog() (*os.File, error) {
@@ -338,8 +355,19 @@ func main() {
 			newButtonPress(ord, txChan)
 
 		case ord := <-networkOrderChan:
+
 			elev = newNetworkMessage(ord, elev)
 			orderChan <- ord
+
+			log.Printf("Received order from network: %#v\n", ord)
+			// orderChan <- ord
+
+			// if message has status not taken, add that to the matrix
+			// if message has status finished, add that to matrix and handle
+			// the same must happen either way
+
+			//TODO: write to file?
+			writeElevatorToFile(elev)
 
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
