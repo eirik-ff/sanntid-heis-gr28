@@ -261,7 +261,7 @@ func main() {
 			//Evaluate if a another order should be taken
 			if newElev.ActiveOrder.Status == order.Finished ||
 				elev.Floor != newElev.Floor {
-				o := findNextOrder(elev)
+				o := findNextOrder(newElev)
 				if o.Status != order.Invalid {
 					fmt.Printf("Order to exec: %s\n", o.ToString())
 
@@ -277,7 +277,7 @@ func main() {
 						log.Println("Next order different from active, send NotTaken")
 					}
 				}
-			}
+			}					
 
 
 			///////////////////////////////
