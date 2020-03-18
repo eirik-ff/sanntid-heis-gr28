@@ -83,7 +83,7 @@ func (o *Order) ToString() string {
 		statusStr = "Finished"
 	}
 
-	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s' timeout:'%d'}", o.Floor, typeStr, statusStr, o.LocalTimeStamp)
+	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s' timeout:'%d'}", o.Floor, typeStr, statusStr, o.LocalTimeStamp) 
 }
 
 // CompareEq checks if o1 == o2 but doesn't check LocalTimeStamp

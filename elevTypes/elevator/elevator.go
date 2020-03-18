@@ -42,8 +42,6 @@ type Elevator struct {
 
 
 func (elev *Elevator) CheckOrderTimestamp(timeoutChan chan <- order.Order) {
-
-	fmt.Println(elev.OrderMatrixToString())
 	
 	//Loop through all orders in matrix
     for f := 0; f < len(elev.Orders); f++ {

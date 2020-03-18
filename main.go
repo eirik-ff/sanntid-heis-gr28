@@ -12,6 +12,7 @@ import (
 	"os/user"
 	"syscall"
 	"time"
+	"math/rand"
 
 	"./driver"
 	"./elevTypes/elevator"
@@ -22,7 +23,7 @@ import (
 
 const (
 	wdTimerInterval time.Duration = 500 * time.Millisecond
-	orderWaitInterval time.Duration = 100 * time.Millisecond //Interval in which the elevator can receive 'Taken', and not update the active order
+	orderWaitInterval time.Duration = 500 * time.Millisecond //Interval in which the elevator can receive 'Taken', and not update the active order
 )
 
 
@@ -159,8 +160,13 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 			
 			if nextOrder.Status != order.Invalid {
 				fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
-				
-				orderTimer.Reset(orderWaitInterval) //Start timer
+
+				//Generate random number
+				lower := -25
+				upper := 25
+				d := lower + rand.Intn(upper - lower)
+				log.Printf("Timeout interval: %d\n", (orderWaitInterval + (time.Duration(d * 10) * time.Millisecond)))
+				orderTimer.Reset(orderWaitInterval + (time.Duration(d) * time.Millisecond)) //Start timer
 				
 
 				
@@ -307,7 +313,9 @@ func main() {
 	
 	if *readFile {
 		elev = readElevatorFromFile() //Read orders from file
-		orderChan <- elev.ActiveOrder
+		o := elev.ActiveOrder
+		o.Status = order.Execute
+		orderChan <- o
 	}
 
 	
@@ -330,6 +338,7 @@ func main() {
 	orderTimer = time.NewTimer(orderWaitInterval)
 	orderTimer.Stop()
 
+	rand.Seed(time.Now().UnixNano())
 	
 	
 	for {
@@ -346,7 +355,9 @@ func main() {
 				
 				orderChan <- nextOrder
 
-				if nextOrder.Type != order.Cab && !order.CompareEq(nextOrder, elev.ActiveOrder) && elev.ActiveOrder.Status != order.Finished {
+
+				//Check if not cab, different than current order and current order is 'taken' (currently executed)
+				if elev.ActiveOrder.Type != order.Cab && nextOrder.Floor != elev.ActiveOrder.Floor && nextOrder.Type != elev.ActiveOrder.Type && elev.ActiveOrder.Status == order.Taken {
 					// tell the other elevators that the last active order
 					// is no longer active and someone else can take it
 					o := elev.ActiveOrder
