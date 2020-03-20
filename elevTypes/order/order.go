@@ -1,14 +1,12 @@
 package order
 
-
 import (
 	"fmt"
 )
 
-
-
 const (
-	OrderTimeout int64 = 10 // seconds
+	// TODO: 10000 is toooooooo large
+	OrderTimeout int64 = 10000 // seconds
 )
 
 // Type is a typedef of int
@@ -46,7 +44,6 @@ const (
 
 // Order is a struct with necessary information to execute an order.
 type Order struct {
-
 	Floor  int
 	Type   Type
 	Status Status
@@ -83,7 +80,7 @@ func (o *Order) ToString() string {
 		statusStr = "Finished"
 	}
 
-	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s' timeout:'%d'}", o.Floor, typeStr, statusStr, o.LocalTimeStamp) 
+	return fmt.Sprintf("Order:{floor:%d type:'%s' status:'%s' timeout:'%d'}", o.Floor, typeStr, statusStr, o.LocalTimeStamp)
 }
 
 // CompareEq checks if o1 == o2 but doesn't check LocalTimeStamp

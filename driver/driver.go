@@ -162,6 +162,7 @@ func setDirection(elev elevator.Elevator) (elevator.Elevator, bool) {
 
 	if elev.Direction != elevator.Direction(d) {
 		elevio.SetMotorDirection(d)
+		motorTimer.Reset(floorChangeTimeout)
 
 		elev.Direction = elevator.Direction(d)
 		updateElev = true
@@ -202,12 +203,11 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 	var elev elevator.Elevator
 	elev = initState
 	//	setLamps(elev)
-	
 
 	mainElevatorChan <- elev // to not make it crash on default in main
 
 	elevio.SetMotorDirection(elevio.MD_Down)
-	
+
 	var updateElev bool = false
 	for {
 		// Capture events

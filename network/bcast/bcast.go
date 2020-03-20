@@ -26,21 +26,19 @@ const networkLogFile = "network.log"
 var logFile *os.File
 var logger *log.Logger
 
-func logReceive(s string){
+func logReceive(s string) {
 	//Filter out IAmAlive messages
 	if !strings.Contains(s, "IAmAlive") {
 		logger.Println("Received message: " + s)
 	}
 }
 
-func logSending(s string){
+func logSending(s string) {
 	//Filter out IAmAlive messages
 	if !strings.Contains(s, "IAmAlive") {
 		logger.Println("Sending message: " + s)
 	}
 }
-
-
 
 // function for finding the first null termination in a byte array
 func clen(n []byte) int {
@@ -148,7 +146,7 @@ func Receiver(port int, outputChans ...interface{}) {
 				if isDuplicate(nanoTimeStamp, &timestampMap, terminatedMsg, Type) {
 					break // if message is duplicate, don't decode the message
 				}
-								
+
 				// convert from json to correct struct type
 				v := reflect.New(Type)
 				json.Unmarshal([]byte(terminatedMsg[len(prefix):clen([]byte(msg))]), v.Interface())
@@ -200,7 +198,6 @@ func Transmitter(port int, txChan <-chan interface{}) {
 			jsonMsg := convertToJSONMsg(msg)
 			logSending(jsonMsg)
 			jsonMsg = prefixMsg(jsonMsg)
-
 
 			for i := 0; i < timesToResendMessage; i++ {
 				// transmit msg

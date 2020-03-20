@@ -16,9 +16,9 @@ var (
 
 func writeToFile(matrix driver.Elevator) {
 
-	os.Remove("elevBackupFile.txt")
+	os.Remove("elevBackupFile.log")
 
-	file, _ := os.OpenFile("elevBackupFile.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, _ := os.OpenFile("elevBackupFile.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 	defer file.Close()
 
