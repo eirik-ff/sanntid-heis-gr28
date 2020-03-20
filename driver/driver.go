@@ -60,10 +60,11 @@ func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, 
 	case order.Taken:
 		// this is when you get a message from the network saying that another
 		// elevator is taking this specific order
-		if elev.Orders[ord.Floor][ord.Type].Status != order.Taken {
-			ord.LocalTimeStamp = time.Now().Unix() + order.OrderTimeout
-			elev.AssignOrderToMatrix(ord)
-		}
+
+		// if elev.Orders[ord.Floor][ord.Type].Status != order.Taken {
+		ord.LocalTimeStamp = time.Now().Unix() + order.OrderTimeout
+		elev.AssignOrderToMatrix(ord)
+		// }
 
 	case order.Execute:
 		// this is when main tells you that this is the order you should execute

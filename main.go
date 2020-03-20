@@ -157,15 +157,17 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 			fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
 
 			//Generate random number
-			a := 9
+			a := 100000
 			lower := -a
 			upper := a
 			d := lower + rand.Intn(upper-lower)
 
 			// select delay based on distance to order
 			dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
-			orderWaitInterval := time.Duration(200*dist) * time.Millisecond
-			orderTimer.Reset(orderWaitInterval + (time.Duration(10*d) * time.Millisecond)) //Start timer
+			orderWaitInterval := time.Duration(250*dist) * time.Millisecond
+			orderWaitInterval += (time.Duration(d) * time.Microsecond)
+			log.Printf("orderWaitInterval: %d\n", orderWaitInterval)
+			orderTimer.Reset(orderWaitInterval) //Start timer
 		}
 	}
 
@@ -249,15 +251,13 @@ func newButtonPress(ord order.Order, txChan chan interface{}) {
 // | Return            | Description                |
 // |-------------------+----------------------------|
 // | elevator.Elevator | The updated elevator state |
-func newNetworkMessage(ord order.Order, elev elevator.Elevator) elevator.Elevator {
+func newNetworkMessage(ord order.Order, elev elevator.Elevator,
+	orderChan chan<- order.Order) elevator.Elevator {
 	log.Printf("Received order from network: %s\n", ord.ToString())
-
-	//If finished - remove
-	if ord.Status == order.Finished {
-		//remove from matrix
-	} else {
-		//update matrix with new order
-	}
+	orderChan <- ord
+	// if message has status not taken, add that to the matrix
+	// if message has status finished, add that to matrix and handle
+	// the same must happen either way
 
 	return elev
 }
@@ -353,16 +353,7 @@ func main() {
 			newButtonPress(ord, txChan)
 
 		case ord := <-networkOrderChan:
-
-			elev = newNetworkMessage(ord, elev)
-			orderChan <- ord
-
-			log.Printf("Received order from network: %#v\n", ord)
-			// orderChan <- ord
-
-			// if message has status not taken, add that to the matrix
-			// if message has status finished, add that to matrix and handle
-			// the same must happen either way
+			elev = newNetworkMessage(ord, elev, orderChan)
 
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
