@@ -26,6 +26,22 @@ const networkLogFile = "network.log"
 var logFile *os.File
 var logger *log.Logger
 
+func logReceive(s string){
+	//Filter out IAmAlive messages
+	if !strings.Contains(s, "IAmAlive") {
+		logger.Println("Received message: " + s)
+	}
+}
+
+func logSending(s string){
+	//Filter out IAmAlive messages
+	if !strings.Contains(s, "IAmAlive") {
+		logger.Println("Sending message: " + s)
+	}
+}
+
+
+
 // function for finding the first null termination in a byte array
 func clen(n []byte) int {
 	for i := 0; i < len(n); i++ {
@@ -71,7 +87,7 @@ func isDuplicate(timestamp string, timestampMap *map[reflect.Type]string, msg st
 		if v != timestamp {
 
 			(*timestampMap)[Type] = timestamp
-			logger.Println("Received message: " + msg)
+			logReceive(msg)
 		} else {
 
 			// logger.Println("Dumped message due to duplicate: " + msg)
@@ -79,7 +95,7 @@ func isDuplicate(timestamp string, timestampMap *map[reflect.Type]string, msg st
 		}
 
 	} else {
-		logger.Println("Received message: " + msg)
+		logReceive(msg)
 		(*timestampMap)[Type] = timestamp
 	}
 	return false
@@ -131,7 +147,7 @@ func Receiver(port int, outputChans ...interface{}) {
 				if isDuplicate(nanoTimeStamp, &timestampMap, terminatedMsg, Type) {
 					break // if message is duplicate, don't decode the message
 				}
-
+								
 				// convert from json to correct struct type
 				v := reflect.New(Type)
 				json.Unmarshal([]byte(terminatedMsg[len(prefix):clen([]byte(msg))]), v.Interface())
@@ -182,7 +198,7 @@ func Transmitter(port int, txChan <-chan interface{}) {
 
 			// convert received struct to json with prefix
 			jsonMsg := convertToJSONMsg(msg)
-			logger.Println("Sending message: " + jsonMsg)
+			logSending(jsonMsg)
 			jsonMsg = prefixMsg(jsonMsg)
 
 
