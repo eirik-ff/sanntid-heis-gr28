@@ -68,6 +68,9 @@ func InitLogger(port int) {
 			fmt.Printf("Error creating log directory at %s\n", logDirPath)
 			return
 		}
+
+		//remove old log file
+		os.Remove(logFilePath)
 		logFile, err = os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_SYNC, 0655)
 		if err != nil {
 			fmt.Printf("Error opening info log file at %s\n", logFilePath)
