@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"os/exec"
 	"os/signal"
 	"os/user"
 	"syscall"
 	"time"
-	"math/rand"
 
 	"./driver"
 	"./elevTypes/elevator"
@@ -22,16 +23,14 @@ import (
 )
 
 const (
-	wdTimerInterval time.Duration = 500 * time.Millisecond
+	wdTimerInterval   time.Duration = 500 * time.Millisecond
 	orderWaitInterval time.Duration = 500 * time.Millisecond //Interval in which the elevator can receive 'Taken', and not update the active order
 )
 
-
 var (
-
-	orderTimer  *time.Timer //Timer used in updatedElevatorState
-	Nfloors  int
-	Nbuttons int
+	orderTimer *time.Timer //Timer used in updatedElevatorState
+	Nfloors    int
+	Nbuttons   int
 )
 
 //States for MAIN
@@ -44,7 +43,7 @@ const (
 )
 
 func readElevatorFromFile() elevator.Elevator {
-	file, _ := os.Open("elevBackupFile.txt")
+	file, _ := os.Open("elevBackupFile.log")
 
 	data, _ := ioutil.ReadAll(file)
 
@@ -59,9 +58,9 @@ func readElevatorFromFile() elevator.Elevator {
 }
 
 func writeElevatorToFile(elev elevator.Elevator) {
-	os.Remove("elevBackupFile.txt")
+	os.Remove("elevBackupFile.log")
 
-	file, _ := os.OpenFile("elevBackupFile.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, _ := os.OpenFile("elevBackupFile.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 	defer file.Close()
 
@@ -154,33 +153,23 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 	if newElev.ActiveOrder.Status == order.Finished ||
 		elev.Floor != newElev.Floor {
 		nextOrder = findNextOrder(newElev)
-		
-		//Start goroutine 
-		go func () {
-			
+
+		//Start goroutine
+		go func() {
+
 			if nextOrder.Status != order.Invalid {
 				fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
 
 				//Generate random number
-				lower := -25
-				upper := 25
-				d := lower + rand.Intn(upper - lower)
-				log.Printf("Timeout interval: %d\n", (orderWaitInterval + (time.Duration(d * 10) * time.Millisecond)))
-				orderTimer.Reset(orderWaitInterval + (time.Duration(d) * time.Millisecond)) //Start timer
-				
+				a := 9
+				lower := -a
+				upper := a
+				d := lower + rand.Intn(upper-lower)
 
-				
-				//		orderChan <- o
-
-				// if o.Type != order.Cab && !order.CompareEq(o, elev.ActiveOrder) {
-				// 	// tell the other elevators that the last active order
-				// 	// is no longer active and someone else can take it
-				// 	o.Status = order.NotTaken
-					
-				// 	txChan <- o //Send new active order 
-				// 	log.Printf("Sending order on network: %s\n", o.ToString())
-				// 	log.Println("Next order different from active, send NotTaken")
-				// }
+				// select delay based on distance to order
+				dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
+				orderWaitInterval := time.Duration(100*dist) * time.Millisecond
+				orderTimer.Reset(orderWaitInterval + (time.Duration(10*d) * time.Millisecond)) //Start timer
 			}
 		}()
 	}
@@ -188,27 +177,29 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 	///////////////////////////////
 	// SEND ORDERS ON NETWORK	 //
 	///////////////////////////////
-	
+
 	//Filter what to send over the network
 	if newElev.ActiveOrder.Status == order.Finished ||
 		newElev.ActiveOrder.Status == order.Taken ||
 		newElev.ActiveOrder.Status == order.NotTaken {
-		
+
 		//Only transmit if active order changed, and not cab order
-		if newElev.ActiveOrder.Type != order.Cab && !order.CompareEq(elev.ActiveOrder, newElev.ActiveOrder){
+		if newElev.ActiveOrder.Type != order.Cab && !order.CompareEq(elev.ActiveOrder, newElev.ActiveOrder) {
 			txChan <- newElev.ActiveOrder //Send active order
 		}
 	}
-	
 
-	if newElev.State == elevator.Error {
-		//If elevator is in error state - send active order
+	if newElev.State == elevator.Error && elev.State != newElev.State {
+		// TODO: need last check to not send a lot of updates when in error state.
+		//       but why is it sending so much?
+
+		//If elevator entered error state - send active order
 		//(is the order set to notTaken in the driver? - if not, need to set it here)
-		//newElev.ActiveOrder = order.NotTaken
-		// txChan <- newElev.ActiveOrder
+		o := newElev.ActiveOrder
+		o.Status = order.NotTaken
+		txChan <- o
+		log.Printf("Elev.State = Error => sent order on network: %s\n", o.ToString())
 
-
-		
 		state = Error //Go to error state
 	}
 
@@ -301,24 +292,21 @@ func main() {
 	readFile := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
 	flag.Parse()
 
-
 	Nfloors = *nfloors
 	Nbuttons = 3 // must be constant
 
 	mainElevatorChan := make(chan elevator.Elevator, 100)
 	orderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
-	
+
 	var elev elevator.Elevator = elevator.NewElevator(Nfloors, Nbuttons)
-	
+
 	if *readFile {
 		elev = readElevatorFromFile() //Read orders from file
 		o := elev.ActiveOrder
 		o.Status = order.Execute
 		orderChan <- o
 	}
-
-	
 
 	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan, elev)
 	elev = <-mainElevatorChan // hang program untill driver is initialized
@@ -327,7 +315,6 @@ func main() {
 	txChan := make(chan interface{})
 	networkOrderChan := make(chan order.Order)
 	go network.Network(20028, *port, txChan, networkOrderChan)
-
 
 	var lastOrder order.Order
 	_ = lastOrder
@@ -339,22 +326,18 @@ func main() {
 	orderTimer.Stop()
 
 	rand.Seed(time.Now().UnixNano())
-	
-	
+
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
-
 			state, elev, nextOrder = updatedElevatorState(newElev, elev, state, txChan)
 
-		case <- orderTimer.C: //Order timer started in updatedElevatorState timed out
+		case <-orderTimer.C: //Order timer started in updatedElevatorState timed out
 
-			
 			//Check if next order to execute is already taken
 			if nextOrder.Status != order.Invalid && elev.Orders[nextOrder.Floor][nextOrder.Type].Status == order.NotTaken {
-				
-				orderChan <- nextOrder
 
+				orderChan <- nextOrder
 
 				//Check if not cab, different than current order and current order is 'taken' (currently executed)
 				if elev.ActiveOrder.Type != order.Cab && nextOrder.Floor != elev.ActiveOrder.Floor && nextOrder.Type != elev.ActiveOrder.Type && elev.ActiveOrder.Status == order.Taken {
@@ -362,13 +345,13 @@ func main() {
 					// is no longer active and someone else can take it
 					o := elev.ActiveOrder
 					o.Status = order.NotTaken
-					
-					txChan <- o //Send new active order 
+
+					txChan <- o //Send new active order
 					log.Printf("Sending order on network: %s\n", o.ToString())
 					log.Println("Next order different from active, send NotTaken")
 				}
 			}
-			
+
 		case ord := <-buttonPressChan:
 			newButtonPress(ord, txChan)
 
@@ -384,8 +367,6 @@ func main() {
 			// if message has status finished, add that to matrix and handle
 			// the same must happen either way
 
-
-
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
 			wdTimer.Reset(wdTimerInterval)
@@ -395,7 +376,7 @@ func main() {
 			return
 
 		case <-time.After(100 * time.Millisecond):
-			
+
 			//////////////////
 			// Evaluate FSM //
 			//////////////////
@@ -410,19 +391,17 @@ func main() {
 			case Normal:
 				//Normal mode
 				//Do nothing?
-				timeoutChan := make(chan order.Order, elev.Nfloors * elev.Nbuttons)
+				timeoutChan := make(chan order.Order, elev.Nfloors*elev.Nbuttons)
 
 				//Check if any taken orders are timed out
-				elev.CheckOrderTimestamp(timeoutChan);
+				elev.CheckOrderTimestamp(timeoutChan)
 
-				
 				for len(timeoutChan) > 0 {
-					o := <- timeoutChan //get timedout order
-					o.Status = order.NotTaken 
+					o := <-timeoutChan //get timedout order
+					o.Status = order.NotTaken
 					orderChan <- o //send order to driver
 				}
-				
-				
+
 				writeElevatorToFile(elev) //write orders to file
 			case Error:
 				//Error mode
@@ -448,91 +427,91 @@ func main() {
 }
 
 func orderBelow(elev elevator.Elevator) (int, int, bool) {
-    for f := elev.Floor - 1; f >= 0; f-- {
-        for t := range elev.Orders[f] {
-            l := len(elev.Orders[f])
-            i := l - t - 1
-            if elev.Orders[f][i].Status == order.NotTaken {
-                return f, i, true
-            }
-        }
-    }
- 
-    return -1, -1, false
+	for f := elev.Floor - 1; f >= 0; f-- {
+		for t := range elev.Orders[f] {
+			l := len(elev.Orders[f])
+			i := l - t - 1
+			if elev.Orders[f][i].Status == order.NotTaken {
+				return f, i, true
+			}
+		}
+	}
+
+	return -1, -1, false
 }
- 
+
 func orderAbove(elev elevator.Elevator) (int, int, bool) {
-    for f := elev.Floor + 1; f < 4; f++ {
-        for t := range elev.Orders[f] {
-            l := len(elev.Orders[f])
-            i := l - t - 1
-            if elev.Orders[f][i].Status == order.NotTaken {
-                return f, i, true
-            }
-        }
-    }
- 
-    return -1, -1, false
+	for f := elev.Floor + 1; f < 4; f++ {
+		for t := range elev.Orders[f] {
+			l := len(elev.Orders[f])
+			i := l - t - 1
+			if elev.Orders[f][i].Status == order.NotTaken {
+				return f, i, true
+			}
+		}
+	}
+
+	return -1, -1, false
 }
- 
+
 func orderAtFloor(elev elevator.Elevator) (int, int, bool) {
-    for t := range elev.Orders[elev.Floor] {
-        l := len(elev.Orders[elev.Floor])
-        i := l - t - 1
-        if elev.Orders[elev.Floor][i].Status == order.NotTaken {
-            return elev.Floor, i, true
-        }
-    }
-    return -1, -1, false
+	for t := range elev.Orders[elev.Floor] {
+		l := len(elev.Orders[elev.Floor])
+		i := l - t - 1
+		if elev.Orders[elev.Floor][i].Status == order.NotTaken {
+			return elev.Floor, i, true
+		}
+	}
+	return -1, -1, false
 }
- 
+
 func orderBetween(elev elevator.Elevator) (int, int, bool) {
-    // checks if there is NotTaken order between current pos and active order
-    if elev.Direction == elevator.Up {
-        for f := elev.Floor; f < elev.ActiveOrder.Floor; f++ {
-            for t := range elev.Orders[f] {
-                l := len(elev.Orders[f])
-                i := l - t - 1
-                if elev.Orders[f][i].Status == order.NotTaken {
-                    return f, i, true
-                }
-            }
-        }
-    } else if elev.Direction == elevator.Down {
-        for f := elev.Floor; f > elev.ActiveOrder.Floor; f-- {
-            for t := range elev.Orders[f] {
-                l := len(elev.Orders[f])
-                i := l - t - 1
-                if elev.Orders[f][i].Status == order.NotTaken {
-                    return f, i, true
-                }
-            }
-        }
-    }
-    return -1, -1, false
+	// checks if there is NotTaken order between current pos and active order
+	if elev.Direction == elevator.Up {
+		for f := elev.Floor; f < elev.ActiveOrder.Floor; f++ {
+			for t := range elev.Orders[f] {
+				l := len(elev.Orders[f])
+				i := l - t - 1
+				if elev.Orders[f][i].Status == order.NotTaken {
+					return f, i, true
+				}
+			}
+		}
+	} else if elev.Direction == elevator.Down {
+		for f := elev.Floor; f > elev.ActiveOrder.Floor; f-- {
+			for t := range elev.Orders[f] {
+				l := len(elev.Orders[f])
+				i := l - t - 1
+				if elev.Orders[f][i].Status == order.NotTaken {
+					return f, i, true
+				}
+			}
+		}
+	}
+	return -1, -1, false
 }
- 
+
 func findNextOrder(elev elevator.Elevator) order.Order {
-    // TODO: re-write this to use one of the algorithms on github
- 
-    // this is currently a simple, dumb implementation that simply looks if
-    // there are orders above, go up. if below, go down.
-    f, t, ok := orderAtFloor(elev)
-    if !ok {
-        f, t, ok = orderAbove(elev)
-    }
-    if !ok {
-        f, t, ok = orderBelow(elev)
-    }
-    if !ok {
-        f, t, ok = orderBetween(elev)
-    }
- 
-    o := order.Order{Floor: f, Type: order.Type(t), Status: order.Execute}
-    if !ok {
-        // no orders exist
-        o.Status = order.Invalid
-    }
- 
-    return o
+	// TODO: re-write this to use one of the algorithms on github
+
+	// this is currently a simple, dumb implementation that simply looks if
+	// there are orders above, go up. if below, go down.
+	f, t, ok := orderAtFloor(elev)
+	if !ok {
+		f, t, ok = orderAbove(elev)
+	}
+	if !ok {
+		f, t, ok = orderBelow(elev)
+	}
+	if !ok {
+		f, t, ok = orderBetween(elev)
+	}
+
+	o := order.Order{Floor: f, Type: order.Type(t), Status: order.Execute}
+	if !ok {
+		// no orders exist
+		o.Status = order.Invalid
+	}
+
+	return o
 }

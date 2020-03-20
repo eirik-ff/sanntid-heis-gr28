@@ -182,9 +182,10 @@ func Transmitter(port int, txChan <-chan interface{}) {
 
 			// convert received struct to json with prefix
 			jsonMsg := convertToJSONMsg(msg)
-			logger.Println("Sending message: " + jsonMsg)
+			if !strings.Contains(jsonMsg, "IAmAlive") {
+				logger.Println("Sending message: " + jsonMsg)
+			}
 			jsonMsg = prefixMsg(jsonMsg)
-
 
 			for i := 0; i < timesToResendMessage; i++ {
 				// transmit msg
