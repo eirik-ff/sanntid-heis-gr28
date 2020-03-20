@@ -18,3 +18,8 @@ heis
 
 # Log files
 logs/
+out/
+*.log
+
+# VScode settings directory
+.vscode/
