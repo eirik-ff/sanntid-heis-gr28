@@ -89,8 +89,6 @@ func isDuplicate(timestamp string, timestampMap *map[reflect.Type]string, msg st
 			(*timestampMap)[Type] = timestamp
 			logReceive(msg)
 		} else {
-
-			// logger.Println("Dumped message due to duplicate: " + msg)
 			return true
 		}
 
@@ -166,7 +164,6 @@ func Receiver(port int, outputChans ...interface{}) {
 // Used before transmitting a message over the network
 func convertToJSONMsg(msg interface{}) string {
 
-	// logger.Println("CONVERT: ", msg)
 	json, err := json.Marshal(msg)
 
 	if err != nil {
