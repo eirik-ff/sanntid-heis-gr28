@@ -234,38 +234,37 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 			elev, updateElev = motorTimeout(elev)
 			log.Println("elev update from motorTimer")
 
-		default:
-			// do nothing
-		}
+		case <-time.After(10 * time.Millisecond):
+			// Send new elevator object to main
+			if updateElev {
+				setLamps(elev)
 
-		// Send new elevator object to main
-		if updateElev {
-			setLamps(elev)
-
-			mainElevatorChan <- elev
-			updateElev = false
-		}
-
-		// Act according to new state
-		switch elev.State {
-		case elevator.Idle:
-			if elev.ActiveOrder.Status == order.Taken {
-				// will come into effect at next iteration
-				elev.State = elevator.Moving
-				updateElev = true
-				log.Println("elev update from idle")
+				mainElevatorChan <- elev
+				updateElev = false
 			}
 
-		case elevator.Moving:
-			elev, updateElev = setDirection(elev)
+			// Act according to new state
+			switch elev.State {
+			case elevator.Idle:
+				if elev.ActiveOrder.Status == order.Taken {
+					// will come into effect at next iteration
+					elev.State = elevator.Moving
+					updateElev = true
+					log.Println("elev update from idle")
+				}
 
-		case elevator.DoorOpen:
-			// do nothing, everything happens in transition/on events
-		case elevator.Error:
-			fallthrough
-		default: // unknown state
-			// TODO: something that happend should not have happened, send
-			// 		 error to main
+			case elevator.Moving:
+				elev, updateElev = setDirection(elev)
+
+			case elevator.DoorOpen:
+				// do nothing, everything happens in transition/on events
+			case elevator.Error:
+				fallthrough
+			default: // unknown state
+				// TODO: something that happend should not have happened, send
+				// 		 error to main
+			}
 		}
+
 	}
 }

@@ -153,20 +153,20 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 		elev.Floor != newElev.Floor {
 		nextOrder = findNextOrder(newElev)
 
-		//Start goroutine
-		// go func() {
-
 		if nextOrder.Status != order.Invalid {
 			fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
 
+			//Generate random number
+			a := 9
+			lower := -a
+			upper := a
+			d := lower + rand.Intn(upper-lower)
+
 			// select delay based on distance to order
-			// TODO: lots of magic numbers here
-			d := rand.Intn(200) // [0,200)
 			dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
-			orderWaitInterval := time.Duration(100*dist) * time.Millisecond
+			orderWaitInterval := time.Duration(200*dist) * time.Millisecond
 			orderTimer.Reset(orderWaitInterval + (time.Duration(10*d) * time.Millisecond)) //Start timer
 		}
-		// }()
 	}
 
 	///////////////////////////////
@@ -192,8 +192,10 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 		//(is the order set to notTaken in the driver? - if not, need to set it here)
 		o := newElev.ActiveOrder
 		o.Status = order.NotTaken
-		txChan <- o
-		log.Printf("Elev.State = Error => sent order on network: %s\n", o.ToString())
+		if o.Type != order.Cab {
+			txChan <- o
+			log.Printf("Elev.State = Error => sent order on network: %s\n", o.ToString())
+		}
 
 		state = Error //Go to error state
 	}
