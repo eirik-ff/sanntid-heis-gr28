@@ -23,8 +23,7 @@ import (
 )
 
 const (
-	wdTimerInterval   time.Duration = 500 * time.Millisecond
-	orderWaitInterval time.Duration = 500 * time.Millisecond //Interval in which the elevator can receive 'Taken', and not update the active order
+	wdTimerInterval time.Duration = 500 * time.Millisecond
 )
 
 var (
@@ -155,23 +154,19 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 		nextOrder = findNextOrder(newElev)
 
 		//Start goroutine
-		go func() {
+		// go func() {
 
-			if nextOrder.Status != order.Invalid {
-				fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
+		if nextOrder.Status != order.Invalid {
+			fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
 
-				//Generate random number
-				a := 9
-				lower := -a
-				upper := a
-				d := lower + rand.Intn(upper-lower)
-
-				// select delay based on distance to order
-				dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
-				orderWaitInterval := time.Duration(100*dist) * time.Millisecond
-				orderTimer.Reset(orderWaitInterval + (time.Duration(10*d) * time.Millisecond)) //Start timer
-			}
-		}()
+			// select delay based on distance to order
+			// TODO: lots of magic numbers here
+			d := rand.Intn(200) // [0,200)
+			dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
+			orderWaitInterval := time.Duration(100*dist) * time.Millisecond
+			orderTimer.Reset(orderWaitInterval + (time.Duration(10*d) * time.Millisecond)) //Start timer
+		}
+		// }()
 	}
 
 	///////////////////////////////
@@ -322,7 +317,7 @@ func main() {
 	state = Normal //Set the state of main to Normal
 
 	var nextOrder order.Order
-	orderTimer = time.NewTimer(orderWaitInterval)
+	orderTimer = time.NewTimer(1 * time.Second) // this init time doesn't matter
 	orderTimer.Stop()
 
 	rand.Seed(time.Now().UnixNano())
