@@ -27,9 +27,10 @@ const (
 )
 
 var (
-	orderTimer *time.Timer //Timer used in updatedElevatorState
-	Nfloors    int
-	Nbuttons   int
+	orderTimer     *time.Timer //Timer used in updatedElevatorState
+	Nfloors        int
+	Nbuttons       int
+	backupFileName string = "elevBackupFile_%d.log" // will be formatted in main
 )
 
 //States for MAIN
@@ -41,30 +42,29 @@ const (
 	Error  State = 2
 )
 
-func readElevatorFromFile() elevator.Elevator {
-	file, _ := os.Open("elevBackupFile.log")
+func readElevatorFromFile(fileName string) elevator.Elevator {
 
-	data, _ := ioutil.ReadAll(file)
+	file, err := os.Open(fileName)
+	if err != nil {
+		log.Printf("No file with path '%s' exists\n", fileName)
+		return elevator.NewElevator(Nfloors, Nbuttons)
+	}
+	defer file.Close()
 
 	var elev elevator.Elevator
-
+	data, _ := ioutil.ReadAll(file)
 	json.Unmarshal([]byte(data), &elev)
 
-	file.Close()
-
 	return elev
-	//return elevator.Elevator{}
 }
 
-func writeElevatorToFile(elev elevator.Elevator) {
-	os.Remove("elevBackupFile.log")
+func writeElevatorToFile(fileName string, elev elevator.Elevator) {
+	os.Remove(fileName)
 
-	file, _ := os.OpenFile("elevBackupFile.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-
+	file, _ := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0644)
 	defer file.Close()
 
 	msg, _ := json.Marshal(elev)
-
 	if _, err := file.Write([]byte(msg)); err != nil {
 		log.Fatal(err)
 	}
@@ -292,14 +292,18 @@ func main() {
 	Nfloors = *nfloors
 	Nbuttons = 3 // must be constant
 
+	backupFileName = fmt.Sprintf(backupFileName, *port)
+
 	mainElevatorChan := make(chan elevator.Elevator, 100)
 	orderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
 
 	var elev elevator.Elevator = elevator.NewElevator(Nfloors, Nbuttons)
-
 	if *readFile {
-		elev = readElevatorFromFile() //Read orders from file
+		elev = readElevatorFromFile(backupFileName) //Read orders from file
+		log.Println("Read old configuration from file")
+		log.Println(elev.ToString())
+		log.Println(elev.OrderMatrixToString())
 		o := elev.ActiveOrder
 		o.Status = order.Execute
 		orderChan <- o
@@ -390,7 +394,7 @@ func main() {
 					orderChan <- o //send order to driver
 				}
 
-				writeElevatorToFile(elev) //write orders to file
+				writeElevatorToFile(backupFileName, elev) //write orders to file
 			case Error:
 				//Error mode
 

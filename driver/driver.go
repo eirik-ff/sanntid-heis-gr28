@@ -69,6 +69,7 @@ func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, 
 	case order.Execute:
 		// this is when main tells you that this is the order you should execute
 		// now
+		ord.LocalTimeStamp = time.Now().Unix() + order.OrderTimeout
 		if elev.ActiveOrder.Status != order.Finished && !order.CompareEq(ord, elev.ActiveOrder) {
 			// new order, set old to NotTaken
 			elev.ActiveOrder.Status = order.NotTaken
