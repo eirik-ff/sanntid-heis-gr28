@@ -113,7 +113,13 @@ func floorChange(elev elevator.Elevator, newFloor int) (elevator.Elevator, bool)
 	log.Printf("New floor: %d\n", newFloor)
 
 	if newFloor == elev.ActiveOrder.Floor {
+		
+		if elev.ActiveOrder.Type != order.Cab {
+			elev.Orders[elev.ActiveOrder.Floor][order.Cab].Status = order.Finished
+		}
+		
 		elev, _ = arrivedAtTarget(elev)
+		
 	} else {
 		elev.State = elevator.Moving
 	}
@@ -235,7 +241,7 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 			elev, updateElev = motorTimeout(elev)
 			log.Println("elev update from motorTimer")
 
-		case <-time.After(10 * time.Millisecond):
+		case <-time.After(1 * time.Millisecond):
 			// Send new elevator object to main
 			if updateElev {
 				setLamps(elev)

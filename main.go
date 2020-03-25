@@ -149,9 +149,9 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, txC
 	var state State = Normal
 	var nextOrder order.Order
 
-	//Evaluate if a another order should be taken
-	if newElev.ActiveOrder.Status == order.Finished ||
-		elev.Floor != newElev.Floor {
+	// //Evaluate if a another order should be taken
+	// if newElev.ActiveOrder.Status == order.Finished ||
+	// 	elev.Floor != newElev.Floor {
 		nextOrder = request.FindNextOrder(newElev)
 
 		if nextOrder.Status != order.Invalid {
@@ -170,10 +170,10 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, txC
 			log.Printf("orderWaitInterval: %d\n", orderWaitInterval)
 			orderTimer.Reset(orderWaitInterval) //Start timer
 		}
-	}
+	// }
 
 	///////////////////////////////
-	// SEND ORDERS ON NETWORK	 //
+    // send ORDERS ON NETWORK	 //
 	///////////////////////////////
 
 	//Filter what to send over the network
