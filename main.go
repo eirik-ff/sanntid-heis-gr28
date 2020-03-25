@@ -166,7 +166,7 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s S
 			dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
 			orderWaitInterval := time.Duration(250*dist) * time.Millisecond
 			orderWaitInterval += (time.Duration(d) * time.Microsecond)
-			log.Printf("orderWaitInterval: %d\n", orderWaitInterval)
+			log.Printf("orderWaitInterval: %d\n", orderWaitInterval) 
 			orderTimer.Reset(orderWaitInterval) //Start timer
 		}
 	}
@@ -334,7 +334,7 @@ func main() {
 			state, elev, nextOrder = updatedElevatorState(newElev, elev, state, txChan)
 
 		case <-orderTimer.C: //Order timer started in updatedElevatorState timed out
-
+			log.Println(nextOrder.ToString())
 			//Check if next order to execute is already taken
 			if nextOrder.Status != order.Invalid && elev.Orders[nextOrder.Floor][nextOrder.Type].Status == order.NotTaken {
 

@@ -72,6 +72,7 @@ func NewElevator(nfloors, nbuttons int) Elevator {
 	}
 
 	elev.State = Idle
+	elev.ActiveOrder.Status = order.Finished
 	return elev
 }
 

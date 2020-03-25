@@ -208,9 +208,9 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 
 	mainElevatorChan <- elev // to not make it crash on default in main
 
-	elevio.SetMotorDirection(elevio.MD_Down)
+	elevio.SetMotorDirection(elevio.MotorDirection(elev.Direction))
 
-	var updateElev bool = false
+	var updateElev bool = true
 	for {
 		// Capture events
 		select {

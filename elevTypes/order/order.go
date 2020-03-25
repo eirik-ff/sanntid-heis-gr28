@@ -5,8 +5,7 @@ import (
 )
 
 const (
-	// TODO: 10000 is toooooooo large
-	OrderTimeout int64 = 10000 // seconds
+	OrderTimeout int64 = 10 // seconds
 )
 
 // Type is a typedef of int
