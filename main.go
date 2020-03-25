@@ -138,14 +138,14 @@ func logPID() {
 // |---------------------+---------------------------|
 // | State               | The updated state of Main |
 // | elevator.Elevator   | New elevator              |
-func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, s State, txChan chan<- interface{}) (State, elevator.Elevator, order.Order) {
+func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, txChan chan<- interface{}) (State, elevator.Elevator, order.Order) {
 	log.Println(newElev.ToString())
 	log.Println(newElev.OrderMatrixToString())
 
 	//Currently both if statements broadcasts the active order on the txChan
 	//I kept it this way, if we need to do additional stuff before broadcasting in error state.
 	//If we do not need to change anything in the case of error. The txChan <- newElev.ActiveOrder should be moved out of the ifs.
-	var state State = s
+	var state State = Normal
 	var nextOrder order.Order
 
 	//Evaluate if a another order should be taken
@@ -307,7 +307,7 @@ func main() {
 		o := elev.ActiveOrder
 		o.Status = order.Execute
 		orderChan <- o
-	}
+	}						
 
 	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan, elev)
 	elev = <-mainElevatorChan // hang program untill driver is initialized
@@ -331,7 +331,7 @@ func main() {
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
-			state, elev, nextOrder = updatedElevatorState(newElev, elev, state, txChan)
+			state, elev, nextOrder = updatedElevatorState(newElev, elev, txChan)
 
 		case <-orderTimer.C: //Order timer started in updatedElevatorState timed out
 			log.Println(nextOrder.ToString())

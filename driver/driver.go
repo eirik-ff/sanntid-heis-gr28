@@ -145,7 +145,6 @@ func doorClose(elev elevator.Elevator) (elevator.Elevator, bool) {
 func motorTimeout(elev elevator.Elevator) (elevator.Elevator, bool) {
 	log.Println("Motor timed out!!")
 
-	elevio.SetMotorDirection(elevio.MD_Stop)
 	elev.State = elevator.Error
 
 	return elev, true
