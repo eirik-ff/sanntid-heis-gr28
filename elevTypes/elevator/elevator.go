@@ -7,8 +7,7 @@ import (
 	"../order"
 )
 
-// MotorDirection is a typedef of elevio.MotorDirection to be able
-// to use it in packages that include driver.
+// Direction is the valid directions the elevator can move.
 type Direction int
 
 const (
@@ -17,6 +16,7 @@ const (
 	Stop Direction = 0
 )
 
+// State is the valid states the elevator can be in.
 type State int
 
 const (
@@ -27,6 +27,7 @@ const (
 	Error    State = 4
 )
 
+// Elevator is a struct of variables key to controlling the elevator.
 type Elevator struct {
 	ActiveOrder order.Order
 	Floor       int
