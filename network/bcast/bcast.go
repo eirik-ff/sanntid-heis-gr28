@@ -51,7 +51,7 @@ func clen(n []byte) int {
 }
 
 //Function for initalizeing the
-func InitLogger(port int) {
+func InitLogger(logID string) {
 	fmt.Printf("Entering init logger %v\n", logger)
 	if logger == nil {
 		fmt.Println("Initializing logger")
@@ -61,7 +61,7 @@ func InitLogger(port int) {
 			return
 		}
 		logDirPath := usr.HomeDir + "/sanntid-heis-gr28/logs/"
-		logFilePath := logDirPath + fmt.Sprintf("port_%d_", port) + networkLogFile
+		logFilePath := logDirPath + fmt.Sprintf("port_%s_", logID) + networkLogFile
 
 		err = os.MkdirAll(logDirPath, 0755)
 		if err != nil {
