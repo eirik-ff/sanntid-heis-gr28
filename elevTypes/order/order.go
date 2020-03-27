@@ -5,6 +5,8 @@ import (
 )
 
 const (
+	// OrderTimeout is how long an order can be Taken before a Finished message
+	// must be received.
 	OrderTimeout int64 = 10 // seconds
 )
 
@@ -12,9 +14,12 @@ const (
 type Type int
 
 const (
-	HallUp   Type = 0
+	// HallUp is hall up order.
+	HallUp Type = 0
+	// HallDown is hall down order.
 	HallDown Type = 1
-	Cab      Type = 2
+	// Cab is cab order, i.e. inside elevator.
+	Cab Type = 2
 )
 
 // Status is typedef of int
@@ -43,15 +48,18 @@ const (
 
 // Order is a struct with necessary information to execute an order.
 type Order struct {
-	Floor  int
-	Type   Type
+	// Floor is target floor of order.
+	Floor int
+	// Type is which type of order, can be HallUp, HallDown, or Cab.
+	Type Type
+	// Status is status of order, see status defines..
 	Status Status
-
 	// LocalTimeStamp is used to check if an order that is marked as taken is
 	// not forgotten about.
 	LocalTimeStamp int64
 }
 
+// ToString converts the order to a readable string.
 func (o *Order) ToString() string {
 	typeStr := ""
 	switch o.Type {
