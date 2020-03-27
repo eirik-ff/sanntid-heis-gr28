@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math"
 	"math/rand"
@@ -12,20 +10,20 @@ import (
 	"os/exec"
 	"os/signal"
 	"os/user"
+	"strconv"
 	"syscall"
 	"time"
 
 	"./driver"
 	"./elevTypes/elevator"
 	"./elevTypes/order"
+	"./filebackup"
 	"./network"
-	"./network/bcast"
 	"./request"
+	"./watchdog"
 )
 
 const (
-	// How often to send message to watchdog.
-	wdTimerInterval time.Duration = 500 * time.Millisecond
 	// How often to check if an order has timed out.
 	checkTimestampInterval time.Duration = 100 * time.Millisecond
 	// How ofter to write the current state to a backup file.
@@ -42,44 +40,6 @@ var (
 	// will be formatted in main
 	backupFileName string = "elevBackupFile_%d.log"
 )
-
-func readElevatorFromFile(fileName string) elevator.Elevator {
-	file, err := os.Open(fileName)
-	if err != nil {
-		log.Printf("No file with path '%s' exists\n", fileName)
-		return elevator.NewElevator(Nfloors, Nbuttons)
-	}
-	defer file.Close()
-
-	var elev elevator.Elevator
-	data, _ := ioutil.ReadAll(file)
-	err = json.Unmarshal([]byte(data), &elev)
-	if err != nil {
-		log.Println("Error converting backup JSON to elevator object.")
-		return elevator.NewElevator(Nfloors, Nbuttons)
-	}
-	return elev
-}
-
-func writeElevatorToFile(fileName string, elev elevator.Elevator) {
-	os.Remove(fileName)
-	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Println("Error creating backup file")
-		return
-	}
-	defer file.Close()
-
-	msg, err := json.Marshal(elev)
-	if err != nil {
-		log.Println("Error converting elevator object to JSON.")
-		return
-	}
-	if _, err := file.Write([]byte(msg)); err != nil {
-		log.Println("Error writing elevator JSON to backup file.")
-		return
-	}
-}
 
 func setupLog() (*os.File, error) {
 	usr, err := user.Current()
@@ -121,6 +81,24 @@ func logPID() {
 	log.Printf("PID: %d\n", pid)
 }
 
+func setupSignals() chan os.Signal {
+	// Capture signals to exit more gracefully
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	return sigs
+}
+
+func setupFlags() (int, bool) {
+	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
+	nfloors := flag.Int("floors", 4, "Number of floors per elevator")
+	readFile := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
+	flag.Parse()
+
+	Nfloors = *nfloors
+	Nbuttons = 3 // must be constant
+	return *port, *readFile
+}
+
 // startOrderTimer selects delay based on distance to order and a random backoff
 // interval. Similar to 802.11 protocol.
 func startOrderTimer(newElev elevator.Elevator, nextOrder order.Order) {
@@ -137,6 +115,32 @@ func startOrderTimer(newElev elevator.Elevator, nextOrder order.Order) {
 	orderWaitInterval += (time.Duration(duration) * time.Microsecond)
 
 	orderTimer.Reset(orderWaitInterval) // resets starts the timer again
+}
+
+// startNextOrder checks if nextOrder is still not taken and executes it. This
+// function is run when orderTimer times out.
+func startNextOrder(
+	elev elevator.Elevator,
+	nextOrder order.Order,
+	orderChan chan<- order.Order,
+	txChan chan<- interface{}) {
+	// Check if next order to execute is already taken
+	if nextOrder.Status != order.Invalid &&
+		elev.Orders[nextOrder.Floor][nextOrder.Type].Status == order.NotTaken {
+		orderChan <- nextOrder
+
+		// tell the other elevators that the last active order
+		// is no longer active and someone else can take it
+		if elev.ActiveOrder.Type != order.Cab &&
+			!order.CompareFloorAndType(nextOrder, elev.ActiveOrder) &&
+			elev.ActiveOrder.Status == order.Taken {
+			log.Println("Next order different from current active. " +
+				"Sending NotTaken.")
+			o := elev.ActiveOrder
+			o.Status = order.NotTaken
+			txChan <- o
+		}
+	}
 }
 
 // updatedElevatorState handles when a new Elevator object is received from the
@@ -189,6 +193,8 @@ func newNetworkMessage(ord order.Order, orderChan chan<- order.Order) {
 }
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
+
 	logFile, err := setupLog()
 	if err != nil {
 		fmt.Println("Error setting up log")
@@ -197,79 +203,42 @@ func main() {
 	defer logFile.Close()
 	logPID()
 
-	// Watchdog setup
-	wdChan := make(chan interface{})
-	wdTimer := time.NewTimer(wdTimerInterval)
-	go bcast.Transmitter(57005, wdChan)
+	watchdog.Setup("28-IAmAlive")
+	sigs := setupSignals()
+	elevIOport, readFile := setupFlags()
 
-	// Capture signals to exit more gracefully
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	// Init driver
-	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
-	nfloors := flag.Int("floors", 4, "Number of floors per elevator")
-	readFile := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
-	flag.Parse()
-
-	Nfloors = *nfloors
-	Nbuttons = 3 // must be constant
-
-	backupFileName = fmt.Sprintf(backupFileName, *port)
+	backupFileName = fmt.Sprintf(backupFileName, elevIOport)
 
 	mainElevatorChan := make(chan elevator.Elevator, 100)
 	orderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
 
 	var elev elevator.Elevator = elevator.NewElevator(Nfloors, Nbuttons)
-	if *readFile {
-		elev = readElevatorFromFile(backupFileName) //Read orders from file
-		log.Println("Read old configuration from file")
-		log.Println(elev.ToString())
-		log.Println(elev.OrderMatrixToString())
+	if readFile {
+		elev = filebackup.Read(backupFileName, Nfloors, Nbuttons)
 		o := elev.ActiveOrder
 		o.Status = order.Execute
 		orderChan <- o
 	}
 
-	go driver.Driver(*port, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan, elev)
-	elev = <-mainElevatorChan // hang program untill driver is initialized
+	go driver.Driver(elevIOport, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan, elev)
+	elev = <-mainElevatorChan // halt program untill driver is initialized
 
-	// Combine network and driver
 	txChan := make(chan interface{})
 	networkOrderChan := make(chan order.Order)
-	go network.Network(20028, *port, txChan, networkOrderChan)
+	go network.Network(20028, strconv.Itoa(elevIOport), txChan, networkOrderChan)
 
-	var nextOrder order.Order
-	orderTimer = time.NewTimer(1 * time.Second) // this init time doesn't matter
+	orderTimer = time.NewTimer(time.Second) // this init time doesn't matter
 	orderTimer.Stop()
 
-	rand.Seed(time.Now().UnixNano())
-
+	var nextOrder order.Order
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
 			elev, nextOrder = updatedElevatorState(newElev, elev, txChan)
 
-		case <-orderTimer.C: //Order timer started in updatedElevatorState timed out
-			log.Println(nextOrder.ToString())
-			//Check if next order to execute is already taken
-			if nextOrder.Status != order.Invalid && elev.Orders[nextOrder.Floor][nextOrder.Type].Status == order.NotTaken {
-
-				orderChan <- nextOrder
-
-				//Check if not cab, different than current order and current order is 'taken' (currently executed)
-				if elev.ActiveOrder.Type != order.Cab && nextOrder.Floor != elev.ActiveOrder.Floor && nextOrder.Type != elev.ActiveOrder.Type && elev.ActiveOrder.Status == order.Taken {
-					// tell the other elevators that the last active order
-					// is no longer active and someone else can take it
-					o := elev.ActiveOrder
-					o.Status = order.NotTaken
-
-					txChan <- o //Send new active order
-					log.Printf("Sending order on network: %s\n", o.ToString())
-					log.Println("Next order different from active, send NotTaken")
-				}
-			}
+		case <-orderTimer.C:
+			startNextOrder(elev, nextOrder, orderChan, txChan)
 
 		case ord := <-buttonPressChan:
 			newButtonPress(ord, txChan)
@@ -287,11 +256,10 @@ func main() {
 			}
 
 		case <-time.After(writeToFileInterval):
-			writeElevatorToFile(backupFileName, elev)
+			filebackup.Write(backupFileName, elev)
 
-		case <-wdTimer.C:
-			wdChan <- "28-IAmAlive"
-			wdTimer.Reset(wdTimerInterval)
+		case <-watchdog.Hungry():
+			watchdog.Feed()
 
 		case sig := <-sigs:
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())

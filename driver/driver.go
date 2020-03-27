@@ -42,9 +42,6 @@ func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, 
 	log.Printf("New order from main: %s\n", ord.ToString())
 
 	switch ord.Status {
-	case order.Abort:
-		// shouldn't happen
-
 	case order.Invalid:
 		// shouldn't happen
 
@@ -71,11 +68,11 @@ func orderFromMain(elev elevator.Elevator, ord order.Order) (elevator.Elevator, 
 		// now
 		ord.LocalTimeStamp = time.Now().Unix() + order.OrderTimeout
 		if elev.ActiveOrder.Status != order.Finished && !order.CompareEq(ord, elev.ActiveOrder) {
-			// new order, set old to NotTaken
-			elev.ActiveOrder.Status = order.NotTaken
-			elev.AssignOrderToMatrix(elev.ActiveOrder)
+			oldActive := elev.ActiveOrder
+			oldActive.Status = order.NotTaken
+			elev.AssignOrderToMatrix(oldActive)
 
-			log.Printf("Reset old active order: %s\n", elev.ActiveOrder.ToString())
+			log.Printf("Reset old active order: %s\n", oldActive.ToString())
 		}
 		// Set new active order
 		ord.Status = order.Taken
@@ -197,7 +194,7 @@ func driverInit(port int, drvButtons chan elevio.ButtonEvent, drvFloors chan int
 // Driver is the main function of the package. It reads the low level channels
 // and sends the information to a higher level.
 // TODO: re-write this
-func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.Elevator,
+func Driver(elevIOport int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.Elevator,
 	orderChan <-chan order.Order, buttonPressChan chan<- order.Order, initElev elevator.Elevator) {
 
 	Nfloors = nfloors
@@ -205,7 +202,7 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 
 	drvButtons := make(chan elevio.ButtonEvent)
 	drvFloors := make(chan int)
-	driverInit(port, drvButtons, drvFloors)
+	driverInit(elevIOport, drvButtons, drvFloors)
 
 	var elev elevator.Elevator = initElev
 	//	setLamps(elev)
