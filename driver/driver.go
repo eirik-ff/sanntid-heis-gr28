@@ -113,13 +113,13 @@ func floorChange(elev elevator.Elevator, newFloor int) (elevator.Elevator, bool)
 	log.Printf("New floor: %d\n", newFloor)
 
 	if newFloor == elev.ActiveOrder.Floor {
-		
+
 		if elev.ActiveOrder.Type != order.Cab {
 			elev.Orders[elev.ActiveOrder.Floor][order.Cab].Status = order.Finished
 		}
-		
+
 		elev, _ = arrivedAtTarget(elev)
-		
+
 	} else {
 		elev.State = elevator.Moving
 	}
@@ -198,7 +198,7 @@ func driverInit(port int, drvButtons chan elevio.ButtonEvent, drvFloors chan int
 // and sends the information to a higher level.
 // TODO: re-write this
 func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.Elevator,
-	orderChan <-chan order.Order, buttonPressChan chan<- order.Order, initState elevator.Elevator) {
+	orderChan <-chan order.Order, buttonPressChan chan<- order.Order, initElev elevator.Elevator) {
 
 	Nfloors = nfloors
 	Nbuttons = nbuttons
@@ -207,8 +207,7 @@ func Driver(port int, nfloors, nbuttons int, mainElevatorChan chan<- elevator.El
 	drvFloors := make(chan int)
 	driverInit(port, drvButtons, drvFloors)
 
-	var elev elevator.Elevator
-	elev = initState
+	var elev elevator.Elevator = initElev
 	//	setLamps(elev)
 
 	mainElevatorChan <- elev // to not make it crash on default in main

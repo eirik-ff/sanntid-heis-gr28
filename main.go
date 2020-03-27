@@ -25,6 +25,7 @@ import (
 
 const (
 	wdTimerInterval time.Duration = 500 * time.Millisecond
+	fsmEvalInterval time.Duration = 100 * time.Millisecond
 )
 
 var (
@@ -152,28 +153,28 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, txC
 	// //Evaluate if a another order should be taken
 	// if newElev.ActiveOrder.Status == order.Finished ||
 	// 	elev.Floor != newElev.Floor {
-		nextOrder = request.FindNextOrder(newElev)
+	nextOrder = request.FindNextOrder(newElev)
 
-		if nextOrder.Status != order.Invalid {
-			fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
+	if nextOrder.Status != order.Invalid {
+		fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
 
-			//Generate random number
-			a := 100000
-			lower := -a
-			upper := a
-			d := lower + rand.Intn(upper-lower)
+		//Generate random number
+		a := 100000
+		lower := -a
+		upper := a
+		d := lower + rand.Intn(upper-lower)
 
-			// select delay based on distance to order
-			dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
-			orderWaitInterval := time.Duration(250*dist) * time.Millisecond
-			orderWaitInterval += (time.Duration(d) * time.Microsecond)
-			log.Printf("orderWaitInterval: %d\n", orderWaitInterval)
-			orderTimer.Reset(orderWaitInterval) //Start timer
-		}
+		// select delay based on distance to order
+		dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
+		orderWaitInterval := time.Duration(250*dist) * time.Millisecond
+		orderWaitInterval += (time.Duration(d) * time.Microsecond)
+		log.Printf("orderWaitInterval: %d\n", orderWaitInterval)
+		orderTimer.Reset(orderWaitInterval) //Start timer
+	}
 	// }
 
 	///////////////////////////////
-    // send ORDERS ON NETWORK	 //
+	// send ORDERS ON NETWORK	 //
 	///////////////////////////////
 
 	//Filter what to send over the network
@@ -202,6 +203,8 @@ func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, txC
 
 		state = Error //Go to error state
 	}
+
+	log.Printf("Main state: %d\n", state)
 
 	return state, newElev, nextOrder
 }
@@ -318,9 +321,6 @@ func main() {
 	networkOrderChan := make(chan order.Order)
 	go network.Network(20028, *port, txChan, networkOrderChan)
 
-	var lastOrder order.Order
-	_ = lastOrder
-
 	state = Normal //Set the state of main to Normal
 
 	var nextOrder order.Order
@@ -368,13 +368,7 @@ func main() {
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())
 			return
 
-		case <-time.After(100 * time.Millisecond):
-
-			//////////////////
-			// Evaluate FSM //
-			//////////////////
-			// log.Println("Evaluate FSM")
-
+		case <-time.After(fsmEvalInterval):
 			switch state {
 			case Init:
 				//Init mode
