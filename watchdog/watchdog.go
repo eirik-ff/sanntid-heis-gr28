@@ -12,18 +12,18 @@ const (
 )
 
 var (
-	wdChan chan interface{}
-	wdTimer *time.Timer 
+	wdChan  chan interface{}
+	wdTimer *time.Timer
 	message string
 )
 
 // Setup initializes the broadcaster and timer. Parameter msg is what is sent
-// to the watchdog program. 
-func Setup(msg string) {
+// to the watchdog program.
+func Setup(msg string, port int) {
 	message = msg
 	wdChan = make(chan interface{})
 	wdTimer = time.NewTimer(wdTimerInterval)
-	go bcast.Transmitter(57005, wdChan)
+	go bcast.Transmitter(port, wdChan)
 }
 
 // Hungry returns a channel which is filled when timer times out.

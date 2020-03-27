@@ -7,9 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"os/exec"
 	"os/signal"
-	"os/user"
 	"strconv"
 	"syscall"
 	"time"
@@ -41,44 +39,15 @@ var (
 	backupFileName string = "elevBackupFile_%d.log"
 )
 
-func setupLog() (*os.File, error) {
-	usr, err := user.Current()
-	if err != nil {
-		fmt.Println("Couldn't create user object")
-		return nil, err
-	}
-	logDirPath := usr.HomeDir + "/sanntid-heis-gr28/logs/"
-	logFileName := "elev.log"
-	logFilePath := logDirPath + logFileName
-
-	err = os.MkdirAll(logDirPath, 0755)
-	if err != nil {
-		fmt.Printf("Error creating log directory at %s\n", logDirPath)
-		return nil, err
-	}
-	logFile, err := os.OpenFile(logFilePath, os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_SYNC, 0655)
-	if err != nil {
-		fmt.Printf("Error opening info log file at %s\n", logFilePath)
-		return nil, err
-	}
-	_ = logFile // logFile will be used later, but for now, stdout is easier
-
+func setupLog() {
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 	log.SetOutput(os.Stdout)
-
-	return logFile, nil
 }
 
-func logPID() {
-	// Save current PID to file to be able to kill program
+func getPID() int {
 	pid := os.Getpid()
-	usr, err := user.Current()
-	if err != nil {
-		fmt.Println("Error getting current user")
-		return
-	}
-	exec.Command("/bin/bash", "-c", fmt.Sprintf("echo %d > %s/sanntid-heis-gr28/logs/pid.txt", pid, usr.HomeDir)).Run()
 	log.Printf("PID: %d\n", pid)
+	return pid
 }
 
 func setupSignals() chan os.Signal {
@@ -88,15 +57,16 @@ func setupSignals() chan os.Signal {
 	return sigs
 }
 
-func setupFlags() (int, bool) {
+func setupFlags() (int, bool, int) {
 	port := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
 	nfloors := flag.Int("floors", 4, "Number of floors per elevator")
 	readFile := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
+	wdPort := flag.Int("wd", 57005, "Port to communicate with watchdog program")
 	flag.Parse()
 
 	Nfloors = *nfloors
 	Nbuttons = 3 // must be constant
-	return *port, *readFile
+	return *port, *readFile, *wdPort
 }
 
 // startOrderTimer selects delay based on distance to order and a random backoff
@@ -194,33 +164,24 @@ func newNetworkMessage(ord order.Order, orderChan chan<- order.Order) {
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+	elevIOport, readFile, wdPort := setupFlags()
 
-	logFile, err := setupLog()
-	if err != nil {
-		fmt.Println("Error setting up log")
-		return
-	}
-	defer logFile.Close()
-	logPID()
-
-	watchdog.Setup("28-IAmAlive")
+	setupLog()
+	pid := getPID()
+	watchdog.Setup(fmt.Sprintf("28-IAmAlive:%d", pid), wdPort)
 	sigs := setupSignals()
-	elevIOport, readFile := setupFlags()
 
-	backupFileName = fmt.Sprintf(backupFileName, elevIOport)
-
+	var elev elevator.Elevator = elevator.NewElevator(Nfloors, Nbuttons)
 	mainElevatorChan := make(chan elevator.Elevator, 100)
 	orderChan := make(chan order.Order, 100)
 	buttonPressChan := make(chan order.Order)
-
-	var elev elevator.Elevator = elevator.NewElevator(Nfloors, Nbuttons)
+	backupFileName = fmt.Sprintf(backupFileName, elevIOport)
 	if readFile {
 		elev = filebackup.Read(backupFileName, Nfloors, Nbuttons)
 		o := elev.ActiveOrder
 		o.Status = order.Execute
 		orderChan <- o
 	}
-
 	go driver.Driver(elevIOport, Nfloors, Nbuttons, mainElevatorChan, orderChan, buttonPressChan, elev)
 	elev = <-mainElevatorChan // halt program untill driver is initialized
 
