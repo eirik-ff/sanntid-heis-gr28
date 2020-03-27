@@ -1,5 +1,7 @@
-# sanntid-heis-gr28
-Heisprosjekt i Sanntid
+# Elevator project
+Elevator project in TTK4145 Real-time programming. 
 
-## Network Module
-[network_example.go](network_example.go) provides an example of how to use the network module.
+## Class diagram
+![class_diagram](docs/diagrams/class-diagram.svg)
+
+
