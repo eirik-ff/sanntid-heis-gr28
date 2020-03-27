@@ -24,28 +24,26 @@ import (
 )
 
 const (
+	// How often to send message to watchdog.
 	wdTimerInterval time.Duration = 500 * time.Millisecond
-	fsmEvalInterval time.Duration = 100 * time.Millisecond
+	// How often to check if an order has timed out.
+	checkTimestampInterval time.Duration = 100 * time.Millisecond
+	// How ofter to write the current state to a backup file.
+	writeToFileInterval time.Duration = 100 * time.Millisecond
 )
 
 var (
-	orderTimer     *time.Timer //Timer used in updatedElevatorState
-	Nfloors        int
-	Nbuttons       int
-	backupFileName string = "elevBackupFile_%d.log" // will be formatted in main
-)
-
-//States for MAIN
-type State int
-
-const (
-	Init   State = 0
-	Normal State = 1
-	Error  State = 2
+	// orderTimer is used to wait before an order is accepted.
+	orderTimer *time.Timer
+	// Nfloors is the number of floor per elevator
+	Nfloors int
+	// Nbuttons is the number of button types per elevator
+	Nbuttons int
+	// will be formatted in main
+	backupFileName string = "elevBackupFile_%d.log"
 )
 
 func readElevatorFromFile(fileName string) elevator.Elevator {
-
 	file, err := os.Open(fileName)
 	if err != nil {
 		log.Printf("No file with path '%s' exists\n", fileName)
@@ -55,23 +53,32 @@ func readElevatorFromFile(fileName string) elevator.Elevator {
 
 	var elev elevator.Elevator
 	data, _ := ioutil.ReadAll(file)
-	json.Unmarshal([]byte(data), &elev)
-
+	err = json.Unmarshal([]byte(data), &elev)
+	if err != nil {
+		log.Println("Error converting backup JSON to elevator object.")
+		return elevator.NewElevator(Nfloors, Nbuttons)
+	}
 	return elev
 }
 
 func writeElevatorToFile(fileName string, elev elevator.Elevator) {
 	os.Remove(fileName)
-
-	file, _ := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(fileName, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Println("Error creating backup file")
+		return
+	}
 	defer file.Close()
 
-	msg, _ := json.Marshal(elev)
-	if _, err := file.Write([]byte(msg)); err != nil {
-		log.Fatal(err)
+	msg, err := json.Marshal(elev)
+	if err != nil {
+		log.Println("Error converting elevator object to JSON.")
+		return
 	}
-
-	file.Close()
+	if _, err := file.Write([]byte(msg)); err != nil {
+		log.Println("Error writing elevator JSON to backup file.")
+		return
+	}
 }
 
 func setupLog() (*os.File, error) {
@@ -114,162 +121,74 @@ func logPID() {
 	log.Printf("PID: %d\n", pid)
 }
 
-//Function for handling 'updated elevator event'
-//
-//*****Why did we call this function*************
-// | Causes for event                           |
-// |--------------------------------------------|
-// | Order matrix changed                       |
-// | Floor changed                              |
-// | DIrection changed                          |
-// | State changed  (this includes error state) |
-//
-//*****What should be done*************
-// | Condition      | Need to do                                                                                                            |
-// |----------------+-----------------------------------------------------------------------------------------------------------------------|
-// | ActiveOrder.Status = Finished | Broadcast the active order on the network. (The driver should have removed the order from the matrix.) |
-// | State = Error                 | Send active order with status notTaken on the network and go to error state                            |
-//
-//
-// | Parameters        | Description                |
-// |-------------------+----------------------------|
-// | e elevator.Elevator | The updated elevator state |
-// | s State           | The main state             |
-//
-// | Returns             | Description               |
-// |---------------------+---------------------------|
-// | State               | The updated state of Main |
-// | elevator.Elevator   | New elevator              |
-func updatedElevatorState(newElev elevator.Elevator, elev elevator.Elevator, txChan chan<- interface{}) (State, elevator.Elevator, order.Order) {
+// startOrderTimer selects delay based on distance to order and a random backoff
+// interval. Similar to 802.11 protocol.
+func startOrderTimer(newElev elevator.Elevator, nextOrder order.Order) {
+	// find wait duration based on distance
+	distPenalty := 250.0 // how much to space distance in time
+	dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
+	orderWaitInterval := time.Duration(distPenalty*dist) * time.Millisecond
+
+	// add random number to avoid time collisions
+	backoffInterval := 100000
+	lower := -backoffInterval
+	upper := backoffInterval
+	duration := lower + rand.Intn(upper-lower)
+	orderWaitInterval += (time.Duration(duration) * time.Microsecond)
+
+	orderTimer.Reset(orderWaitInterval) // resets starts the timer again
+}
+
+// updatedElevatorState handles when a new Elevator object is received from the
+// driver.
+func updatedElevatorState(
+	newElev elevator.Elevator,
+	elev elevator.Elevator,
+	txChan chan<- interface{}) (elevator.Elevator, order.Order) {
+
 	log.Println(newElev.ToString())
 	log.Println(newElev.OrderMatrixToString())
 
-	//Currently both if statements broadcasts the active order on the txChan
-	//I kept it this way, if we need to do additional stuff before broadcasting in error state.
-	//If we do not need to change anything in the case of error. The txChan <- newElev.ActiveOrder should be moved out of the ifs.
-	var state State = Normal
-	var nextOrder order.Order
-
-	// //Evaluate if a another order should be taken
-	// if newElev.ActiveOrder.Status == order.Finished ||
-	// 	elev.Floor != newElev.Floor {
-	nextOrder = request.FindNextOrder(newElev)
-
+	nextOrder := request.FindNextOrder(newElev)
 	if nextOrder.Status != order.Invalid {
-		fmt.Printf("Order to exec: %s\n", nextOrder.ToString())
-
-		//Generate random number
-		a := 100000
-		lower := -a
-		upper := a
-		d := lower + rand.Intn(upper-lower)
-
-		// select delay based on distance to order
-		dist := math.Abs(float64(nextOrder.Floor) - float64(newElev.Floor))
-		orderWaitInterval := time.Duration(250*dist) * time.Millisecond
-		orderWaitInterval += (time.Duration(d) * time.Microsecond)
-		log.Printf("orderWaitInterval: %d\n", orderWaitInterval)
-		orderTimer.Reset(orderWaitInterval) //Start timer
+		startOrderTimer(newElev, nextOrder)
 	}
-	// }
 
-	///////////////////////////////
-	// send ORDERS ON NETWORK	 //
-	///////////////////////////////
-
-	//Filter what to send over the network
 	if newElev.ActiveOrder.Status == order.Finished ||
-		newElev.ActiveOrder.Status == order.Taken ||
-		newElev.ActiveOrder.Status == order.NotTaken {
-
-		//Only transmit if active order changed, and not cab order
-		if newElev.ActiveOrder.Type != order.Cab && !order.CompareEq(elev.ActiveOrder, newElev.ActiveOrder) {
-			txChan <- newElev.ActiveOrder //Send active order
+		newElev.ActiveOrder.Status == order.Taken {
+		// Only transmit if active order changed, and not cab order
+		if !order.CompareEq(elev.ActiveOrder, newElev.ActiveOrder) &&
+			newElev.ActiveOrder.Type != order.Cab {
+			txChan <- newElev.ActiveOrder
 		}
 	}
 
-	if newElev.State == elevator.Error && elev.State != newElev.State {
-		// TODO: need last check to not send a lot of updates when in error state.
-		//       but why is it sending so much?
-
-		//If elevator entered error state - send active order
-		//(is the order set to notTaken in the driver? - if not, need to set it here)
+	enteredErrorState := newElev.State == elevator.Error && elev.State != newElev.State
+	if enteredErrorState {
 		o := newElev.ActiveOrder
 		o.Status = order.NotTaken
 		if o.Type != order.Cab {
 			txChan <- o
-			log.Printf("Elev.State = Error => sent order on network: %s\n", o.ToString())
+			log.Println("Entered error state. Sending active order on network.")
 		}
-
-		state = Error //Go to error state
 	}
 
-	log.Printf("Main state: %d\n", state)
-
-	return state, newElev, nextOrder
+	return newElev, nextOrder
 }
 
-//Function for handling 'new button press'
-//
-//*****Why did we call this function*************
-// | Causes for event |
-// |------------------|
-// | New button press |
-
-// *****What should be done*************
-// | Need to do                                            |
-// |-------------------------------------------------------|
-// | Broadcast new order on the network if not cab call    |
-//
-// | Parameters      | Description        |
-// |-----------------+--------------------|
-// | ord order.Order | The new order      |
 func newButtonPress(ord order.Order, txChan chan interface{}) {
 	if ord.Type != order.Cab {
-		txChan <- ord //transmit new button order
+		txChan <- ord
 		log.Printf("Sending order on network: %s\n", ord.ToString())
 	}
 }
 
-//Function for handling 'new button press'
-//
-// *****Why did we call this function*************
-// | Causes for event          |
-// |---------------------------|
-// | New order                 |
-// | Someone started an order  |
-// | Someone finished an order |
-//
-// *****What should be done*************
-// | Condition                    | Need to do                                |
-// |------------------------------+-------------------------------------------|
-// | New order                    | Update the matrix with the received order |
-// | Someone stated an order      | Update the matrix with the received order |
-// | Someone finished a new order | Remove the order from the matrix          |
-//
-// | Parameters             | Description        |
-// |------------------------+--------------------|
-// | ord order.Order        | The received order |
-// | e elevator.Elevator    | The elevator state |
-//
-// | Return            | Description                |
-// |-------------------+----------------------------|
-// | elevator.Elevator | The updated elevator state |
-func newNetworkMessage(ord order.Order, elev elevator.Elevator,
-	orderChan chan<- order.Order) elevator.Elevator {
+func newNetworkMessage(ord order.Order, orderChan chan<- order.Order) {
 	log.Printf("Received order from network: %s\n", ord.ToString())
 	orderChan <- ord
-	// if message has status not taken, add that to the matrix
-	// if message has status finished, add that to matrix and handle
-	// the same must happen either way
-
-	return elev
 }
 
 func main() {
-
-	state := Init //Set the state of main to Init
-
 	logFile, err := setupLog()
 	if err != nil {
 		fmt.Println("Error setting up log")
@@ -321,8 +240,6 @@ func main() {
 	networkOrderChan := make(chan order.Order)
 	go network.Network(20028, *port, txChan, networkOrderChan)
 
-	state = Normal //Set the state of main to Normal
-
 	var nextOrder order.Order
 	orderTimer = time.NewTimer(1 * time.Second) // this init time doesn't matter
 	orderTimer.Stop()
@@ -332,7 +249,7 @@ func main() {
 	for {
 		select {
 		case newElev := <-mainElevatorChan:
-			state, elev, nextOrder = updatedElevatorState(newElev, elev, txChan)
+			elev, nextOrder = updatedElevatorState(newElev, elev, txChan)
 
 		case <-orderTimer.C: //Order timer started in updatedElevatorState timed out
 			log.Println(nextOrder.ToString())
@@ -358,7 +275,19 @@ func main() {
 			newButtonPress(ord, txChan)
 
 		case ord := <-networkOrderChan:
-			elev = newNetworkMessage(ord, elev, orderChan)
+			newNetworkMessage(ord, orderChan)
+
+		case <-time.After(checkTimestampInterval):
+			timeoutChan := make(chan order.Order, elev.Nfloors*elev.Nbuttons)
+			elev.CheckOrderTimestamp(timeoutChan)
+			for len(timeoutChan) > 0 {
+				o := <-timeoutChan
+				o.Status = order.NotTaken
+				orderChan <- o
+			}
+
+		case <-time.After(writeToFileInterval):
+			writeElevatorToFile(backupFileName, elev)
 
 		case <-wdTimer.C:
 			wdChan <- "28-IAmAlive"
@@ -367,48 +296,6 @@ func main() {
 		case sig := <-sigs:
 			log.Printf("Received signal: %s. Exiting...\n", sig.String())
 			return
-
-		case <-time.After(fsmEvalInterval):
-			switch state {
-			case Init:
-				//Init mode
-				//Do nothing?
-
-				//Init is done before entering the for/select main loop
-			case Normal:
-				//Normal mode
-				//Do nothing?
-				timeoutChan := make(chan order.Order, elev.Nfloors*elev.Nbuttons)
-
-				//Check if any taken orders are timed out
-				elev.CheckOrderTimestamp(timeoutChan)
-
-				for len(timeoutChan) > 0 {
-					o := <-timeoutChan //get timedout order
-					o.Status = order.NotTaken
-					orderChan <- o //send order to driver
-				}
-
-				writeElevatorToFile(backupFileName, elev) //write orders to file
-			case Error:
-				//Error mode
-
-				//Do something to check if you should still be in error mode
-				//F.ex. Move the motor to check if a new floor change is detected.
-
-				//////////////////
-				// PSUDOCODE    //
-				//////////////////
-				// if stillError() {
-				// 	state = error
-				// }
-				// else {
-				// 	state = normal or init
-				// }
-
-			default: // unknown state
-
-			}
 		}
 	}
 }
