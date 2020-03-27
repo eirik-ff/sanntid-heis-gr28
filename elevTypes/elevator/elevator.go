@@ -36,13 +36,12 @@ type Elevator struct {
 	Nfloors  int
 	Nbuttons int
 	Orders   [][]order.Order
-	// TODO: bounds check on index when accessing? if two elevators have
-	// 		 different number of floors this will be necessary.
-	// 		 maybe need bound check to be fault tolerant?
 }
 
+// CheckOrderTimestamp checks the Orders matrix for orders where the current
+// time is passed the stored timeout time, and pushes all timed out orders onto
+// timeoutChan channel.
 func (elev *Elevator) CheckOrderTimestamp(timeoutChan chan<- order.Order) {
-
 	//Loop through all orders in matrix
 	for f := 0; f < len(elev.Orders); f++ {
 		for t := range elev.Orders[f] {
@@ -61,6 +60,8 @@ func (elev *Elevator) CheckOrderTimestamp(timeoutChan chan<- order.Order) {
 	}
 }
 
+// NewElevator creates a new elevator object and initializes its order matrix.
+// This is the prefered way of creating a new elevator object.
 func NewElevator(nfloors, nbuttons int) Elevator {
 	var elev Elevator
 	elev.Nfloors = nfloors
@@ -76,6 +77,7 @@ func NewElevator(nfloors, nbuttons int) Elevator {
 	return elev
 }
 
+// ToString creates a string representation of an elevator object.
 func (elev *Elevator) ToString() string {
 	dirStr := fmt.Sprintf("Invalid (%d)", elev.Direction)
 	switch elev.Direction {
@@ -105,6 +107,10 @@ func (elev *Elevator) ToString() string {
 		elev.ActiveOrder.ToString(), elev.Floor, dirStr, stateStr)
 }
 
+// OrderMatrixToString creates a string representation of the order matrix. The
+// format is XXX XXX XXX XXX where each X is a digit representing that orders
+// status. The first batch is floor 0 with hall up, hall down, cab order of the
+// digits. The second batch is floor 1, and so on.
 func (elev *Elevator) OrderMatrixToString() string {
 	s := ""
 	for f := 0; f < elev.Nfloors; f++ {
@@ -114,19 +120,6 @@ func (elev *Elevator) OrderMatrixToString() string {
 		s += " "
 	}
 	return s
-}
-
-// SameOrderInMatrix checks if the same order with
-func (elev *Elevator) SameOrderInMatrix(o order.Order) bool {
-	for f := range elev.Orders {
-		for t := range elev.Orders[f] {
-			curr := elev.Orders[f][t]
-			if order.CompareEq(curr, o) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // AssignOrderToMatrix modifies the order matrix to set the argument order `ord`
