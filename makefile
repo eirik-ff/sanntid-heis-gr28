@@ -7,17 +7,19 @@ PROJECT_NAME = heis
 .PHONY: packetloss
 .PHONY: packetlossoff
 
+FROMFILE = false
+
 build :
 	go build -o $(PROJECT_NAME) main.go
 
 run1 :
-	./heis | tee out1.log
+	./heis -port 15657 -wd 57005 -fromfile $(FROMFILE) | tee out15657.log
 
 run2 :
-	./heis -port 15658 | tee out2.log
+	./heis -port 15658 -wd 57006 -fromfile $(FROMFILE) | tee out15658.log
 
 run3 :
-	./heis -port 15659 | tee out3.log
+	./heis -port 15659 -wd 57007 -fromfile $(FROMFILE) | tee out15659.log
     
 packetloss :
 	sudo iptables -A INPUT -p tcp --dport 15657 -j ACCEPT
