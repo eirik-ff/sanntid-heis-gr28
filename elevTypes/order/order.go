@@ -14,36 +14,30 @@ const (
 type Type int
 
 const (
-	// HallUp is hall up order.
-	HallUp Type = 0
-	// HallDown is hall down order.
+	HallUp   Type = 0
 	HallDown Type = 1
-	// Cab is cab order, i.e. inside elevator.
-	Cab Type = 2
+	Cab      Type = 2
 )
 
 // Status is typedef of int
 type Status int
 
 const (
-	// Abort status is when an elevator on the network sends a message
-	// with better cost and you should abort the currently active order.
-	Abort Status = -1
 	// Invalid exists because the default value of int is zero,
 	// but the status field must be set to the desired status manually.
 	Invalid Status = 0
 	// NotTaken status is set if an order is received, but no one has
 	// broadcasted that they are taking this order
-	NotTaken Status = 2
+	NotTaken Status = 1
 	// Taken status is set if someone has broadcasted that they are taking
 	// this order
-	Taken Status = 3
+	Taken Status = 2
 	// Execute status is set when the order should be executed by this local
 	// elevator
-	Execute Status = 4
+	Execute Status = 3
 	// Finished status is assigned to orders which have been executed and
 	// are finisehd (duh).
-	Finished Status = 5
+	Finished Status = 4
 )
 
 // Order is a struct with necessary information to execute an order.
@@ -73,8 +67,6 @@ func (o *Order) ToString() string {
 
 	statusStr := ""
 	switch o.Status {
-	case Abort:
-		statusStr = "Abort"
 	case Invalid:
 		statusStr = "Invalid"
 	case NotTaken:
