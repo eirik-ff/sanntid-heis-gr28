@@ -1,8 +1,6 @@
 package request
 
 import (
-	"fmt"
-
 	"../elevTypes/elevator"
 	"../elevTypes/order"
 )
@@ -12,8 +10,6 @@ var lastHallCall order.Order
 func orderBelow(elev elevator.Elevator) (int, order.Type, bool) {
 	for f := elev.Floor - 1; f >= 0; f-- {
 		for t := range elev.Orders[f] {
-			//			l := len(elev.Orders[f])
-			//			i := l - t - 1
 			if elev.Orders[f][t].Status == order.NotTaken {
 				return f, order.Type(t), true
 			}
@@ -26,8 +22,6 @@ func orderBelow(elev elevator.Elevator) (int, order.Type, bool) {
 func orderAboveFromElev(elev elevator.Elevator) (int, order.Type, bool) {
 	for f := elev.Floor + 1; f < 4; f++ {
 		for t := range elev.Orders[f] {
-			//			l := len(elev.Orders[f])
-			//			i := l - t - 1
 			if elev.Orders[f][t].Status == order.NotTaken {
 				return f, order.Type(t), true
 			}
@@ -38,10 +32,8 @@ func orderAboveFromElev(elev elevator.Elevator) (int, order.Type, bool) {
 }
 
 func orderAboveFromTop(elev elevator.Elevator) (int, order.Type, bool) {
-	for f := elev.Nfloors - 1; f >= elev.Floor + 1; f-- {
+	for f := elev.Nfloors - 1; f >= elev.Floor+1; f-- {
 		for t := range elev.Orders[f] {
-			//			l := len(elev.Orders[f])
-			//			i := l - t - 1
 			if elev.Orders[f][t].Status == order.NotTaken {
 				return f, order.Type(t), true
 			}
@@ -53,8 +45,6 @@ func orderAboveFromTop(elev elevator.Elevator) (int, order.Type, bool) {
 
 func orderAtFloor(elev elevator.Elevator) (int, order.Type, bool) {
 	for t := range elev.Orders[elev.Floor] {
-		//		l := len(elev.Orders[elev.Floor])
-		//		i := l - t - 1
 		if elev.Orders[elev.Floor][t].Status == order.NotTaken {
 			return elev.Floor, order.Type(t), true
 		}
@@ -67,8 +57,6 @@ func orderBetween(elev elevator.Elevator) (int, order.Type, bool) {
 	if elev.Direction == elevator.Up {
 		for f := elev.Floor; f < elev.ActiveOrder.Floor; f++ {
 			for t := range elev.Orders[f] {
-				//				l := len(elev.Orders[f])
-				//				i := l - t - 1
 				if elev.Orders[f][t].Status == order.NotTaken {
 					return f, order.Type(t), true
 				}
@@ -77,8 +65,6 @@ func orderBetween(elev elevator.Elevator) (int, order.Type, bool) {
 	} else if elev.Direction == elevator.Down {
 		for f := elev.Floor; f > elev.ActiveOrder.Floor; f-- {
 			for t := range elev.Orders[f] {
-				//				l := len(elev.Orders[f])
-				//				i := l - t - 1
 				if elev.Orders[f][t].Status == order.NotTaken {
 					return f, order.Type(t), true
 				}
@@ -120,13 +106,12 @@ func FindNextOrder(elev elevator.Elevator) order.Order {
 		if elev.ActiveOrder.Status != order.Finished {
 			ok = false
 		}
-		
+
 	case order.HallDown:
-		if f, t, ok = orderAtFloor(elev); !ok || t == order.HallUp  {
+		if f, t, ok = orderAtFloor(elev); !ok || t == order.HallUp {
 			ok = false
 		}
 		if !ok {
-			fmt.Println("from top")
 			if f, t, ok = orderAboveFromTop(elev); !ok {
 				ok = false
 			}
@@ -140,28 +125,14 @@ func FindNextOrder(elev elevator.Elevator) order.Order {
 			f, t, ok = orderBelow(elev)
 		}
 		if !ok {
-			 f, t, ok = orderAtFloor(elev) 
-				ok = false
-			
+			f, t, ok = orderAtFloor(elev)
+			ok = false
+
 		}
 		if elev.ActiveOrder.Status != order.Finished {
 			ok = false
 		}
 	}
-	// if !ok {
-	// 	f, t, ok = orderBetween(elev)
-	// }
-
-	// f, t, ok := orderAtFloor(elev)
-	// if !ok {
-	// 	f, t, ok = orderAbove(elev)
-	// }
-	// if !ok {
-	// 	f, t, ok = orderBelow(elev)
-	// }
-	// if !ok {
-	// 	f, t, ok = orderBetween(elev)
-	// }
 
 	o := order.Order{Floor: f, Type: t, Status: order.Execute}
 	if !ok {
