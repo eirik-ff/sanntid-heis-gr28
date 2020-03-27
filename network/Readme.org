@@ -1,0 +1,5 @@
+* Network module
+The network module can transmit any Struct send into the txChan on the transmitter goroutine.
+The receiver will decode the received message and send it out on the correct channel, corresponding to the correct Struct type.
+
+Run main.go for an example of how the network module can be used

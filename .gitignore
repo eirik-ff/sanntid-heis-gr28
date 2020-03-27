@@ -5,6 +5,8 @@
 *.so
 *.dylib
 
+heis
+
 # Test binary, built with `go test -c`
 *.test
 
@@ -13,3 +15,11 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Log files
+logs/
+out/
+*.log
+
+# VScode settings directory
+.vscode/
