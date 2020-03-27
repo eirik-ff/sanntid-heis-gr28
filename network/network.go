@@ -12,5 +12,3 @@ func Network(port int, logID string, txChan chan interface{}, rxChans ...interfa
 	go bcast.Transmitter(port, txChan)
 	go bcast.Receiver(port, rxChans...)
 }
-
-//  LocalWords:  JSON

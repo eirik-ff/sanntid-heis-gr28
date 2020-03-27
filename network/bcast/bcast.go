@@ -15,28 +15,23 @@ import (
 	"../conn"
 )
 
-// UniqueID appended to every message to differentiate out messages from other groups
-const UniqueID string = "4242"
+const (
+	// uniqueID appended to every message to differentiate out messages from other groups
+	uniqueID string = "4242"
+	// Times to resend a network package
+	timesToResendMessage int    = 10
+	networkLogFile       string = "network.log"
+)
 
-// Times to resend a network package
-const timesToResendMessage = 10
+var (
+	logFile *os.File
+	logger  *log.Logger
+)
 
-const networkLogFile = "network.log"
-
-var logFile *os.File
-var logger *log.Logger
-
-func logReceive(s string) {
-	//Filter out IAmAlive messages
-	if !strings.Contains(s, "IAmAlive") {
-		logger.Println("Received message: " + s)
-	}
-}
-
-func logSending(s string) {
-	//Filter out IAmAlive messages
-	if !strings.Contains(s, "IAmAlive") {
-		logger.Println("Sending message: " + s)
+// logMessage logs msg with prefix, but filters out IAmAlive messages.
+func logMessage(msg string, prefix string) {
+	if !strings.Contains(msg, "IAmAlive") {
+		logger.Println(prefix + ": " + msg)
 	}
 }
 
@@ -50,7 +45,7 @@ func clen(n []byte) int {
 	return len(n)
 }
 
-//Function for initalizeing the
+// InitLogger initalizes the logger object and file
 func InitLogger(logID string) {
 	fmt.Printf("Entering init logger %v\n", logger)
 	if logger == nil {
@@ -88,13 +83,13 @@ func isDuplicate(timestamp string, timestampMap *map[reflect.Type]string, msg st
 		if v != timestamp {
 
 			(*timestampMap)[Type] = timestamp
-			logReceive(msg)
+			logMessage(msg, "Received message")
 		} else {
 			return true
 		}
 
 	} else {
-		logReceive(msg)
+		logMessage(msg, "Received message")
 		(*timestampMap)[Type] = timestamp
 	}
 	return false
@@ -104,7 +99,7 @@ func isDuplicate(timestamp string, timestampMap *map[reflect.Type]string, msg st
 // the correct channel based on the type it received.
 //
 // Received message format:
-// | UniqueID | TimeStamp | PID | Struct type | Message |
+// | uniqueID | TimeStamp | PID | Struct type | Message |
 //
 // Note: the PID is of the sending process. It's used to filter out messages so
 // 	     they are not sent to the sending process.
@@ -128,9 +123,9 @@ func Receiver(port int, outputChans ...interface{}) {
 			Type := reflect.TypeOf(ch).Elem() // Type of channel
 			typeName := Type.String()
 
-			prefix := UniqueID + typeName                                               // prefix to search for
-			nanoTimeStamp := string(buf[len(UniqueID) : timestampLength+len(UniqueID)]) // extract timestamp
-			pidStr := string(buf[timestampLength+len(UniqueID) : timestampLength+len(UniqueID)+pidLength])
+			prefix := uniqueID + typeName                                               // prefix to search for
+			nanoTimeStamp := string(buf[len(uniqueID) : timestampLength+len(uniqueID)]) // extract timestamp
+			pidStr := string(buf[timestampLength+len(uniqueID) : timestampLength+len(uniqueID)+pidLength])
 			recvPid, err := strconv.Atoi(pidStr)
 			if err != nil {
 				logger.Printf("Received pid string '%s' couldn't be converted\n", pidStr)
@@ -139,7 +134,7 @@ func Receiver(port int, outputChans ...interface{}) {
 			}
 
 			// remove the timestamp and pid from the message
-			msg := string(buf[:len(UniqueID)]) + string(buf[len(UniqueID)+timestampLength+pidLength:])
+			msg := string(buf[:len(uniqueID)]) + string(buf[len(uniqueID)+timestampLength+pidLength:])
 			terminatedMsg := msg[:clen([]byte(msg))] // remove trailing zero bytes
 
 			if strings.HasPrefix(terminatedMsg[:clen([]byte(msg))], prefix) {
@@ -178,7 +173,7 @@ func prefixMsg(msg string) string {
 	nanoTime := fmt.Sprintf("%020d", time.Now().UTC().UnixNano())
 	pid := fmt.Sprintf("%06d", os.Getpid())
 
-	prefixedMsg := UniqueID + nanoTime + pid + msg
+	prefixedMsg := uniqueID + nanoTime + pid + msg
 	return prefixedMsg
 }
 
@@ -196,7 +191,7 @@ func Transmitter(port int, txChan <-chan interface{}) {
 
 			// convert received struct to json with prefix
 			jsonMsg := convertToJSONMsg(msg)
-			logSending(jsonMsg)
+			logMessage(jsonMsg, "Sending message")
 			jsonMsg = prefixMsg(jsonMsg)
 
 			for i := 0; i < timesToResendMessage; i++ {
