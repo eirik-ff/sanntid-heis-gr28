@@ -86,3 +86,8 @@ func (o *Order) ToString() string {
 func CompareEq(o1, o2 Order) bool {
 	return o1.Floor == o2.Floor && o1.Type == o2.Type && o1.Status == o2.Status
 }
+
+// CompareFloorAndType checks if only floor and type of o1 and o2 are equal
+func CompareFloorAndType(o1, o2 Order) bool {
+	return o1.Floor == o2.Floor && o1.Type == o2.Type
+}
