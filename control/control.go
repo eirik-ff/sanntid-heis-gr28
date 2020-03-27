@@ -170,7 +170,7 @@ func Setup(elevIOport, nfloors int, readFile bool) {
 
 // Loop starts a for-select loop that runs the control logic for the elevator.
 func Loop(sigs chan os.Signal) {
-	elev := <-mainElevatorChan // halt program untill driver is initialized
+	elev := <-mainElevatorChan // halt program until driver is initialized
 	var nextOrder order.Order
 	for {
 		select {
@@ -195,7 +195,6 @@ func Loop(sigs chan os.Signal) {
 				orderChan <- o
 			}
 
-		case <-time.After(writeToFileInterval):
 			filebackup.Write(backupFileName, elev)
 
 		case <-watchdog.Hungry():
