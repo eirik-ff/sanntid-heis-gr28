@@ -1,10 +1,10 @@
 package filebackup
 
 import (
-	"os"
-	"log"
 	"encoding/json"
 	"io/ioutil"
+	"log"
+	"os"
 
 	"../elevTypes/elevator"
 )
