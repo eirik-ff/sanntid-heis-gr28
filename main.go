@@ -15,6 +15,8 @@ import (
 func setupLog() {
 	log.SetFlags(log.Ldate | log.Lmicroseconds | log.Lshortfile)
 	log.SetOutput(os.Stdout)
+
+	os.Mkdir("logs", 0755)
 }
 
 func getPID() int {
