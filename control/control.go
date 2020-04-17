@@ -31,7 +31,7 @@ var (
 	// orderTimer is used to wait before an order is accepted.
 	orderTimer *time.Timer
 	// will be formatted in main
-	backupFileName string = "elevBackupFile_%d.log"
+	backupFileName string = "logs/elevBackupFile_%d.log"
 
 	Nfloors  int
 	Nbuttons int = 3
