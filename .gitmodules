@@ -1,0 +1,3 @@
+[submodule "watchdog-go-submod"]
+	path = watchdog-go-submod
+	url = https://github.com/eirik-ff/watchdog-go.git
