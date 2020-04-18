@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/user"
 	"reflect"
 	"strconv"
 	"strings"
@@ -47,18 +46,13 @@ func clen(n []byte) int {
 
 // InitLogger initalizes the logger object and file
 func InitLogger(logID string) {
-	fmt.Printf("Entering init logger %v\n", logger)
 	if logger == nil {
-		fmt.Println("Initializing logger")
-		usr, err := user.Current()
-		if err != nil {
-			fmt.Println("Couldn't create user object")
-			return
-		}
-		logDirPath := usr.HomeDir + "/sanntid-heis-gr28/logs/"
-		logFilePath := logDirPath + fmt.Sprintf("port_%s_", logID) + networkLogFile
+		// fmt.Println("Initializing logger")
+		cwd, _ := os.Getwd()
+		logDirPath := cwd + "/logs/"
+		logFilePath := logDirPath + fmt.Sprintf("%s_", logID) + networkLogFile
 
-		err = os.MkdirAll(logDirPath, 0755)
+		err := os.MkdirAll(logDirPath, 0755)
 		if err != nil {
 			fmt.Printf("Error creating log directory at %s\n", logDirPath)
 			return

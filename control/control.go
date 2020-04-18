@@ -161,7 +161,7 @@ func Setup(elevIOport, nfloors int, readFile bool) {
 
 	txChan = make(chan interface{})
 	networkOrderChan = make(chan order.Order)
-	logID := strconv.Itoa(elevIOport)
+	logID := "port" + strconv.Itoa(elevIOport)
 	go network.Network(20028, logID, txChan, networkOrderChan)
 
 	orderTimer = time.NewTimer(time.Second) // this init time doesn't matter
