@@ -1,5 +1,6 @@
 PROJECT_NAME = heis
 LOGS_DIR = ./logs
+WD_SUBMOD_DIR = ./watchdog-go-submod
 CWD = $(shell pwd)
 WD_MSG = "28-IAmAlive"
 
@@ -25,8 +26,8 @@ build : logs/
 	go build -o $(PROJECT_NAME) main.go
 
 buildall : build
-	cd watchdog-go-submod && make
-	cp watchdog-go-submod/wd ./wd
+	cd $(WD_SUBMOD_DIR) && make
+	cp $(WD_SUBMOD_DIR)/wd ./wd
 
 logs/ :
 	mkdir $(LOGS_DIR)
@@ -47,13 +48,13 @@ start3 : logs/
 ### Run targets ###
 ###################
 run1 : logs/
-	./heis --port 15657 --wd 57005 $(FROMFILE) | tee logs/out15657.log
+	./heis --port 15657 --wd 57005 $(FROMFILE) | tee $(LOG_DIR)/out15657.log
 
 run2 : logs/
-	./heis --port 15658 --wd 57006 $(FROMFILE) | tee logs/out15658.log
+	./heis --port 15658 --wd 57006 $(FROMFILE) | tee $(LOG_DIR)/out15658.log
 
 run3 : logs/
-	./heis --port 15659 --wd 57007 $(FROMFILE) | tee logs/out15659.log
+	./heis --port 15659 --wd 57007 $(FROMFILE) | tee $(LOG_DIR)/out15659.log
     
 #####################
 ### Other targets ###
@@ -80,4 +81,5 @@ clean :
 	rm -rf $(PROJECT_NAME) 2> /dev/null
 	rm -rf $(LOGS_DIR) 2> /dev/null
 	rm -rf *.log 2> /dev/null
+	cd $(WD_SUBMOD_DIR) && make clean
 
