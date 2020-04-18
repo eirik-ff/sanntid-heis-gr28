@@ -32,25 +32,28 @@ func setupSignals() chan os.Signal {
 	return sigs
 }
 
-func parseFlags() (port, nfloors, wdPort int, readFile bool) {
+func parseFlags() (port, nfloors, wdPort int, wdMsg string, readFile bool) {
 	portF := flag.Int("port", 15657, "Port for connecting to ElevatorServer/SimElevatorServer")
 	nfloorsF := flag.Int("floors", 4, "Number of floors per elevator")
 	readFileF := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
 	wdPortF := flag.Int("wd", 57005, "Port to communicate with watchdog program")
+	wdMsgF := flag.String("wdmsg", "28-IAmAlive",
+		"String to send to watchdog to indicate the program is up and running")
 	flag.Parse()
 
 	port = *portF
 	nfloors = *nfloorsF
 	wdPort = *wdPortF
+	wdMsg = *wdMsgF
 	readFile = *readFileF
 	return
 }
 
 func main() {
-	elevIOport, nfloors, wdPort, readFile := parseFlags()
+	elevIOport, nfloors, wdPort, wdMsg, readFile := parseFlags()
 	setupLog()
 	pid := getPID()
-	watchdog.Setup(fmt.Sprintf("28-IAmAlive:%d", pid), wdPort)
+	watchdog.Setup(fmt.Sprintf("%s:%d", wdMsg, pid), wdPort)
 	sigs := setupSignals()
 
 	control.Setup(elevIOport, nfloors, readFile)

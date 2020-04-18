@@ -37,25 +37,25 @@ logs/ :
 ### Start targets ###
 #####################
 start1 : logs/
-	./wd --port=57005 --message=$(WD_MSG) --exec='$(CWD)/heis --port=15657 --wd=57005 --fromfile'
+	./wd --port=57005 --message=$(WD_MSG) --exec='$(CWD)/heis --port=15657 --wd=57005 --wdmsg=$(WD_MSG) --fromfile'
 
 start2 : logs/
-	./wd --port=57006 --message=$(WD_MSG) --exec='$(CWD)/heis --port=15658 --wd=57006 --fromfile'
+	./wd --port=57006 --message=$(WD_MSG) --exec='$(CWD)/heis --port=15658 --wd=57006 --wdmsg=$(WD_MSG) --fromfile'
 
 start3 : logs/
-	./wd --port=57007 --message=$(WD_MSG) --exec='$(CWD)/heis --port=15659 --wd=57007 --fromfile'
+	./wd --port=57007 --message=$(WD_MSG) --exec='$(CWD)/heis --port=15659 --wd=57007 --wdmsg=$(WD_MSG) --fromfile'
 
 ###################
 ### Run targets ###
 ###################
 run1 : logs/
-	./heis --port 15657 --wd 57005 $(FROMFILE) | tee $(LOG_DIR)/out15657.log
+	./heis --port 15657 --wd 57005 --wdmsg=$(WD_MSG) $(FROMFILE) | tee $(LOG_DIR)/out15657.log
 
 run2 : logs/
-	./heis --port 15658 --wd 57006 $(FROMFILE) | tee $(LOG_DIR)/out15658.log
+	./heis --port 15658 --wd 57006 --wdmsg=$(WD_MSG) $(FROMFILE) | tee $(LOG_DIR)/out15658.log
 
 run3 : logs/
-	./heis --port 15659 --wd 57007 $(FROMFILE) | tee $(LOG_DIR)/out15659.log
+	./heis --port 15659 --wd 57007 --wdmsg=$(WD_MSG) $(FROMFILE) | tee $(LOG_DIR)/out15659.log
     
 #####################
 ### Other targets ###
