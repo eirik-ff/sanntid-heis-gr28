@@ -31,7 +31,7 @@ Slightly modified version of the given [Network-go](https://github.com/TTK4145/N
 Implements functions to select the next order to execute.
 
 ### Watchdog
-Implements functions to send a message to the watchdog program (added as git submodule to this repository) [Watchdog-go](./watchdog-go-submod) which monitors this process and respawns it if it dies.
+Implements functions to send a message to the watchdog program (added as git submodule to this repository) [Watchdog-go](./watchdog-go-submod/README.md) which monitors this process and respawns it if it dies.
 
 ### Main
 Runs initial setup and starts the control module. 
