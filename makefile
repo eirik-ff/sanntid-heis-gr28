@@ -1,4 +1,5 @@
 PROJECT_NAME = heis
+WD_BIN_NAME = wd
 LOGS_DIR = ./logs
 WD_SUBMOD_DIR = ./watchdog-go-submod
 CWD = $(shell pwd)
@@ -27,7 +28,7 @@ build : logs/
 
 buildall : build
 	cd $(WD_SUBMOD_DIR) && make
-	cp $(WD_SUBMOD_DIR)/wd ./wd
+	cp $(WD_SUBMOD_DIR)/wd ./$(WD_BIN_NAME)
 
 logs/ :
 	mkdir $(LOGS_DIR)
@@ -78,8 +79,9 @@ packetlossoff :
 	sudo iptables -F
 
 clean :
-	rm -rf $(PROJECT_NAME) 2> /dev/null
-	rm -rf $(LOGS_DIR) 2> /dev/null
-	rm -rf *.log 2> /dev/null
+	rm -rf $(PROJECT_NAME)
+	rm -rf $(WD_BIN_NAME)
+	rm -rf $(LOGS_DIR)
+	rm -rf *.log
 	cd $(WD_SUBMOD_DIR) && make clean
 
