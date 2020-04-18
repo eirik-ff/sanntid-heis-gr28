@@ -37,7 +37,7 @@ func parseFlags() (port, nfloors, wdPort int, wdMsg string, readFile bool) {
 	nfloorsF := flag.Int("floors", 4, "Number of floors per elevator")
 	readFileF := flag.Bool("fromfile", false, "Read Elevator struct from file if this flag is passed")
 	wdPortF := flag.Int("wd", 57005, "Port to communicate with watchdog program")
-	wdMsgF := flag.String("wdmsg", "28-IAmAlive",
+	wdMsgF := flag.String("wdmsg", "xx-IAmAlive",
 		"String to send to watchdog to indicate the program is up and running")
 	flag.Parse()
 
