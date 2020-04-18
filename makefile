@@ -3,7 +3,7 @@ WD_BIN_NAME = wd
 LOGS_DIR = ./logs
 WD_SUBMOD_DIR = ./watchdog-go-submod
 CWD = $(shell pwd)
-WD_MSG = "28-IAmAlive"
+WD_MSG = '28-IAmAlive'
 
 .PHONY: run1
 .PHONY: run2
