@@ -2,6 +2,8 @@
 Elevator project in TTK4145 Real-time programming. 
 
 ## How to run 
+**Note**: This only works on Linux. If you're on Windows, good luck figuring out how to do this. 
+
 To compile the necessary programs, run `make buildall`. 
 
 To run the elevator without the watchdog, run `make runN` where `N` is `1`, `2`, or `3`. 
